@@ -477,7 +477,7 @@ static c4snet_data_t *MPIUnpackFun(void *buf)
     result = C4SNetAlloc(type, count, &tmp);
     SNetDistribUnpack(tmp, buf, TypeToMPIType(type), count);
   } else {
-    result = C4SNetCreate(type, 1, &tmp);
+    result = C4SNetAlloc(type, 1, &tmp);
     SNetDistribUnpack(tmp, buf, TypeToMPIType(type), 1);
   }
 
