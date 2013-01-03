@@ -32,6 +32,8 @@ void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
   }
 }
 
+void SNetDistribLocalStop(void) { MPI_Finalize(); }
+
 void SNetDistribGlobalStop(void)
 {
   int i;
@@ -41,8 +43,6 @@ void SNetDistribGlobalStop(void)
     MPI_Send(&i, 1, MPI_INT, i, snet_stop, MPI_COMM_WORLD);
   }
 }
-
-void SNetDistribLocalStop(void) { MPI_Finalize(); }
 
 int SNetDistribGetNodeId(void) { return node_location; }
 

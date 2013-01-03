@@ -61,6 +61,26 @@ inline static void UnpackDest(void *buf, snet_dest_t *dest)
   UnpackInt(buf, 1, &dest->dynamicLoc);
 }
 
+void SNetDistribFetchRef(snet_ref_t *ref)
+{
+  mpi_buf_t buf = {0, 0, NULL};
+  SNetRefSerialise(ref, &buf, &PackInt, &PackByte);
+  MPISend(buf.data, buf.offset, SNetRefNode(ref), snet_ref_fetch);
+  SNetMemFree(buf.data);
+}
+
+void SNetDistribUpdateRef(snet_ref_t *ref, int count)
+{
+  mpi_buf_t buf = {0, 0, NULL};
+  SNetRefSerialise(ref, &buf, &PackInt, &PackByte);
+  PackInt(&buf, 1, &count);
+  MPISend(buf.data, buf.offset, SNetRefNode(ref), snet_ref_update);
+  SNetMemFree(buf.data);
+}
+
+/**
+ * Distrib implementation (distribcommon.h) 
+ */
 snet_msg_t SNetDistribRecvMsg(void)
 {
   int count;
@@ -121,27 +141,12 @@ void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
   MPISend(sendBuf.data, sendBuf.offset, dest.node, snet_rec);
 }
 
-void SNetDistribFetchRef(snet_ref_t *ref)
+void SNetDistribBlockDest(snet_dest_t dest)
 {
   mpi_buf_t buf = {0, 0, NULL};
-  SNetRefSerialise(ref, &buf, &PackInt, &PackByte);
-  MPISend(buf.data, buf.offset, SNetRefNode(ref), snet_ref_fetch);
+  PackDest(&buf, &dest);
+  MPISend(buf.data, buf.offset, dest.node, snet_block);
   SNetMemFree(buf.data);
-}
-
-void SNetDistribUpdateRef(snet_ref_t *ref, int count)
-{
-  mpi_buf_t buf = {0, 0, NULL};
-  SNetRefSerialise(ref, &buf, &PackInt, &PackByte);
-  PackInt(&buf, 1, &count);
-  MPISend(buf.data, buf.offset, SNetRefNode(ref), snet_ref_update);
-  SNetMemFree(buf.data);
-}
-
-void SNetDistribUpdateBlocked(void)
-{
-  mpi_buf_t buf = {0, 0, NULL};
-  MPISend(buf.data, buf.offset, node_location, snet_update);
 }
 
 void SNetDistribUnblockDest(snet_dest_t dest)
@@ -152,12 +157,10 @@ void SNetDistribUnblockDest(snet_dest_t dest)
   SNetMemFree(buf.data);
 }
 
-void SNetDistribBlockDest(snet_dest_t dest)
+void SNetDistribUpdateBlocked(void)
 {
   mpi_buf_t buf = {0, 0, NULL};
-  PackDest(&buf, &dest);
-  MPISend(buf.data, buf.offset, dest.node, snet_block);
-  SNetMemFree(buf.data);
+  MPISend(buf.data, buf.offset, node_location, snet_update);
 }
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
