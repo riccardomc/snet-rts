@@ -15,6 +15,7 @@ inline static void MPIPack(mpi_buf_t *buf, void *src,
   int size;
   char *newBuf;
 
+  //calculate buffer size and alloc a bigger buffer if needed.
   MPI_Pack_size(count, type, MPI_COMM_WORLD, &size);
   if ((unsigned) size > buf->size - buf->offset) {
     newBuf = SNetMemAlloc(buf->offset + size);

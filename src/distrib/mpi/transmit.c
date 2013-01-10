@@ -81,6 +81,10 @@ void SNetDistribUpdateRef(snet_ref_t *ref, int count)
 /**
  * Distrib implementation (distribcommon.h) 
  */
+
+/**
+ * blocking
+ */ 
 snet_msg_t SNetDistribRecvMsg(void)
 {
   int count;
@@ -131,6 +135,9 @@ snet_msg_t SNetDistribRecvMsg(void)
   return result;
 }
 
+/*
+ * Unblocking 
+ */
 void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 {
   static mpi_buf_t sendBuf = {0, 0, NULL};
