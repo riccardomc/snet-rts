@@ -11,7 +11,7 @@
 #define HNAME_LEN 256 
 
 typedef struct {
-  size_t tab_s;
+  size_t tab_size;
   char tab[][HNAME_LEN];
 } htab_t;
 

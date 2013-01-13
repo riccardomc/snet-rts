@@ -5,7 +5,7 @@
 *
 * TODO:
 * - we'll need a simple int to addr mapping. DONE
-* - packing and unpacking (serialization).
+* - packing and unpacking (serialization). DONE
 * - how to handle streams? proper protocol? (REQ/RESP or PUSH/PULL)
 *
 **/
@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <assert.h>
+#include "pack.h"
+#include "htab.h"
 
 zctx_t *context;
 void *instream;

@@ -6,9 +6,9 @@ htab_t *htab_alloc(size_t size) {
   htab_t *table = malloc(sizeof(htab_t) + size * HNAME_LEN * sizeof(char *));
   
   if (table)
-    table->tab_s = size;
+    table->tab_size = size;
   else
-    table->size = 0;
+    table->tab_size = 0;
 
   return table;
 }
@@ -18,18 +18,18 @@ void htab_free(htab_t *table) {
 }
 
 size_t htab_size(htab_t *table) {
-  return table->tab_s;
+  return table->tab_size;
 }
 
 void htab_dump(htab_t *table) {
   size_t i;
 
-  for (i = 0; i < table->tab_s; i++)
+  for (i = 0; i < table->tab_size; i++)
     printf("%s\n", table->tab[i]);
 }
 
 char *htab_lookup(htab_t *table, size_t index) {
-  if (!table || index > table->tab_s)
+  if (!table || index > table->tab_size)
     return NULL;
   
   return table->tab[index];

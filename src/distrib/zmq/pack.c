@@ -1,23 +1,9 @@
-/**
- * Riccardo M. Cefala                     Thu Jan 10 16:52:26 CET 2013
- *
- * Serialization/Deserialization stuff for zmq distrib layer.
- *
- */
-
-#include <stdio.h>
-#include <stdlib.h>
 #include <zmq.h>
 #include <czmq.h>
+//#include "reference.h"
+//#include "record.h"
+#include "pack.h"
 
-/**
- * packs an integer array into a zframe_t
- *
- * If buf is NULL, a new frame is created, otherwise data is appended.
- * It relies on ZMQ de/allocation.
- *
- * FIXME: should we enforce a maximum buffer_size?
- */
 inline static void PackInt(void *buf, int count, int *src) {
   zframe_t **dstframe = (zframe_t **)buf;
 
@@ -34,78 +20,140 @@ inline static void PackInt(void *buf, int count, int *src) {
     zframe_reset(*dstframe, newsrc, dstframe_size + src_size);
 
     free(newsrc);
-    zframe_print(*dstframe, "ADD PACK: ");
 
   } else {
     *dstframe = zframe_new(src, sizeof(int) * count);
-    zframe_print(*dstframe, "NEW PACK: ");
   }
 }
 
-/**
- * unpacks an integer array from a zframe_t (buf) into dst
- *
- * FIXME: again, should I care about dst size?
- */
 inline static void UnpackInt(void *buf, int count, int *dst) {
   byte *src = zframe_data(buf);
   memcpy((byte *)dst, src, count * sizeof(int));
 }
 
+inline static void PackByte(void *buf, int count, char *src) {
+  zframe_t **dstframe = (zframe_t **)buf;
+
+  if (*dstframe != NULL) {
+    size_t src_size = count;
+    size_t dstframe_size = zframe_size(*dstframe);
+    byte *dstframe_data = zframe_data(*dstframe);
+    
+    byte *newsrc = (byte *)malloc(src_size + dstframe_size);
+
+    memcpy(newsrc, dstframe_data, dstframe_size);
+    memcpy(newsrc + dstframe_size, src, src_size);
+
+    zframe_reset(*dstframe, newsrc, dstframe_size + src_size);
+
+    free(newsrc);
+
+  } else {
+    *dstframe = zframe_new(src, count);
+  }
+}
+
+inline static void UnpackByte(void *buf, int count, char *dst) {
+  byte *src = zframe_data(buf);
+  memcpy(dst, src, count);
+}
+
+/*
+
+inline static void PackRef(void *buf, int count, snet_ref_t **src)
+{
+  for (int i = 0; i < count; i++) {
+    SNetRefSerialise(src[i], buf, &PackInt, &PackByte);
+    SNetRefOutgoing(src[i]);
+  }
+}
+
+inline static void UnpackRef(void *buf, int count, snet_ref_t **dst)
+{
+  for (int i = 0; i < count; i++) {
+    dst[i] = SNetRefDeserialise(buf, &UnpackInt, &UnpackByte);
+    SNetRefIncoming(dst[i]);
+  }
+}
+
+inline static void PackDest(void *buf, snet_dest_t *dest)
+{
+  PackInt(buf, 1, &dest->dest);
+  PackInt(buf, 1, &dest->parent);
+  PackInt(buf, 1, &dest->dynamicIndex);
+  PackInt(buf, 1, &dest->parentNode);
+  PackInt(buf, 1, &dest->dynamicLoc);
+}
+
+inline static void UnpackDest(void *buf, snet_dest_t *dest)
+{
+  UnpackInt(buf, 1, &dest->dest);
+  UnpackInt(buf, 1, &dest->parent);
+  UnpackInt(buf, 1, &dest->dynamicIndex);
+  UnpackInt(buf, 1, &dest->parentNode);
+  UnpackInt(buf, 1, &dest->dynamicLoc);
+}
+
+*/
+
 #ifdef PACKTEST
+
+#include <stdio.h>
+#include <stdlib.h>
+
 int main(int argc, char **argv) {
+  zframe_t *srcframe = NULL;
+  zframe_t *dstframe = NULL;
+  size_t srcsize = 3;
+  size_t srcframe_size, i = 0, j = 0;
+
+  char srcdata[2][3] = {{0, 1, 1}, {2, 3, 5}};
+  char *dstdata;
+
   zctx_t *ctx = zctx_new ();
   assert (ctx);
 
   void *output = zsocket_new (ctx, ZMQ_PAIR);
   assert (output);
   zsocket_bind (output, "inproc://zframe.test");
+
   void *input = zsocket_new (ctx, ZMQ_PAIR);
   assert (input);
   zsocket_connect (input, "inproc://zframe.test");
 
-  zframe_t *srcframe = NULL;
-  size_t srcsize = 3;
-  size_t srcframe_size, i, j = 0;
+  PackByte(&srcframe, srcsize, srcdata[j]);
+  zframe_print(srcframe, "SEND: ");
+  zframe_send(&srcframe, output, ZFRAME_REUSE);
 
-  int srcdata[2][3] = {{0, 1, 1}, {2, 3, 5}};
-  int *dstdata;
+  dstframe = zframe_recv(input);
+  zframe_print(dstframe, "RECV: ");
 
-  printf("Packing... ");
-  for (i = 0; i < srcsize; i++)
-    printf(" %d,", srcdata[j][i]);
-  printf("\n");
+  /*
+  srcframe_size = zframe_size(srcframe);
+  dstdata = malloc(srcframe_size);
+  UnpackByte(srcframe, srcframe_size, dstdata);
+  */
 
-  PackInt(&srcframe, srcsize, srcdata[j]);
-  zframe_print(srcframe, "MAIN: ");
-
-  srcframe_size = zframe_size(srcframe) / sizeof(int);
-  dstdata = malloc(sizeof(int) * srcframe_size);
-  UnpackInt(srcframe, srcframe_size, dstdata);
-  printf("Unpacking... ");
-  for (i = 0; i < srcframe_size ; i++)
-    printf(" %d,", dstdata[i]);
-  printf("\n");
-  free(dstdata);
+  zframe_destroy(&dstframe);
 
   j++;
 
-  printf("Packing... ");
-  for (i = 0; i < srcsize; i++)
-    printf(" %d,", srcdata[j][i]);
-  printf("\n");
+  PackByte(&srcframe, srcsize, srcdata[j]);
+  zframe_print(srcframe, "SEND: ");
+  zframe_send(&srcframe, output, 0);
 
-  PackInt(&srcframe, srcsize, srcdata[j]);
-  zframe_print(srcframe, "MAIN: ");
+  dstframe = zframe_recv(input);
+  zframe_print(dstframe, "RECV: ");
 
-  srcframe_size = zframe_size(srcframe) / sizeof(int);
-  dstdata = malloc(sizeof(int) * srcframe_size);
-  UnpackInt(srcframe, srcframe_size, dstdata);
-  printf("Unpacking... ");
-  for (i = 0; i < srcframe_size; i++)
-    printf(" %d,", dstdata[i]);
-  printf("\n");
-  free(dstdata);
+  /*
+  srcframe_size = zframe_size(srcframe);
+  dstdata = malloc(srcframe_size);
+  UnpackByte(srcframe, srcframe_size, dstdata);
+  */
+
+  zframe_destroy(&dstframe);
+  zframe_destroy(&srcframe);
+  zctx_destroy(&ctx);
 
   exit(EXIT_SUCCESS);
 }
