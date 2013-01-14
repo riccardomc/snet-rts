@@ -1,7 +1,7 @@
 #include <zmq.h>
 #include <czmq.h>
-//#include "reference.h"
-//#include "record.h"
+#include "reference.h"
+#include "record.h"
 #include "pack.h"
 
 inline static void PackInt(void *buf, int count, int *src) {
@@ -31,7 +31,7 @@ inline static void UnpackInt(void *buf, int count, int *dst) {
   memcpy((byte *)dst, src, count * sizeof(int));
 }
 
-inline static void PackByte(void *buf, int count, char *src) {
+inl ine static void PackByte(void *buf, int count, char *src) {
   zframe_t **dstframe = (zframe_t **)buf;
 
   if (*dstframe != NULL) {
@@ -57,8 +57,6 @@ inline static void UnpackByte(void *buf, int count, char *dst) {
   byte *src = zframe_data(buf);
   memcpy(dst, src, count);
 }
-
-/*
 
 inline static void PackRef(void *buf, int count, snet_ref_t **src)
 {
@@ -94,7 +92,6 @@ inline static void UnpackDest(void *buf, snet_dest_t *dest)
   UnpackInt(buf, 1, &dest->dynamicLoc);
 }
 
-*/
 
 #ifdef PACKTEST
 
