@@ -31,7 +31,7 @@ inline static void UnpackInt(void *buf, int count, int *dst) {
   memcpy((byte *)dst, src, count * sizeof(int));
 }
 
-inl ine static void PackByte(void *buf, int count, char *src) {
+inline static void PackByte(void *buf, int count, char *src) {
   zframe_t **dstframe = (zframe_t **)buf;
 
   if (*dstframe != NULL) {

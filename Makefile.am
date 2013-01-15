@@ -221,6 +221,31 @@ libdistribscc_la_CPPFLAGS = \
 	-I$(srcdir)/../../../scc-hg/rcce/include
 endif
 
+pkglib_LTLIBRARIES += libdistribzmq.la
+libdistribzmq_la_SOURCES = \
+	src/distrib/common/tuplelist.c \
+	src/distrib/common/tuplelist.h \
+	src/distrib/common/imanager.c \
+	src/distrib/common/imanager.h \
+	src/distrib/common/omanager.c \
+	src/distrib/common/omanager.h \
+	src/distrib/common/reference.c \
+	src/distrib/common/reference.h \
+	src/distrib/common/distribcommon.c \
+	src/distrib/common/distribcommon.h \
+	src/distrib/zmq/distribution.c \
+	src/distrib/zmq/htab.c \
+	src/distrib/zmq/htab.h \
+	src/distrib/zmq/pack.h
+libdistribzmq_la_CPPFLAGS = \
+        $(AM_CPPFLAGS) \
+	-I$(srcdir)/src/distrib/zmq \
+	-I$(srcdir)/src/distrib/common \
+	-I/opt/local/include \
+	-L/opt/local/lib \
+	-lzmq \
+	-lczmq
+
 # common flags
 INCLUDES = -I$(top_srcdir)/include
 

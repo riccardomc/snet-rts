@@ -42,6 +42,10 @@ AM_CONDITIONAL([ENABLE_DIST_MPI], [test $use_mpi = yes])
 
 dnl ensure that either mpicc or cc detected above are configured in c99 mode
 AC_PROG_CC_C99 
+if test "x$ac_cv_prog_cc_c99" = xno; then
+  AC_MSG_ERROR([C99 support is required.])
+fi
+
 dnl and API extensions are available. 
 AC_USE_SYSTEM_EXTENSIONS
 
