@@ -241,10 +241,7 @@ libdistribzmq_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/zmq \
 	-I$(srcdir)/src/distrib/common \
-	-I/opt/local/include \
-	-L/opt/local/lib \
-	-lzmq \
-	-lczmq
+	-I/opt/local/include 
 
 # common flags
 INCLUDES = -I$(top_srcdir)/include

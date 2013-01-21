@@ -311,6 +311,9 @@ void C4SNetInit( int id, snet_distrib_t distImpl)
                            "it.\n");
       #endif
       break;
+    case zmq:
+      //TODO: Implement PackFuncs and other...
+      break;
     default:
       SNetUtilDebugFatal("C4SNet doesn't support the selected distribution "
                          "layer (%d).\n", distImpl);

@@ -79,7 +79,7 @@ typedef struct {
 } sort_end_rec_t;
 
 typedef struct {
-  bool local; /* a flag that is set only at a local GC cleanup */
+  int local; /* a flag that is set only at a local GC cleanup */
 } terminate_rec_t;
 
 typedef struct {
