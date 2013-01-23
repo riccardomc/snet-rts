@@ -3,12 +3,6 @@
 *
 * ZMQ Distribution implementation attempt.
 *
-* TODO:
-* - we'll need a simple int to addr mapping. DONE
-* - packing and unpacking (serialization). DONE
-* - rewrite functions with ZMQ. DONE
-* - how to handle streams? proper protocol? DONE (PUSH/PULL)
-*
 **/
 
 #include <zmq.h>
@@ -30,8 +24,8 @@
 
 zctx_t *context;
 void *sock_in;
+void *sock_sync;
 void **sock_out;
-int port_in = 20737;
 
 htab_t *host_table;
 int node_location;
@@ -52,9 +46,49 @@ int SNetDistribZMQHostsCount()
   return htab_size(host_table);
 }
 
+/*
+ *FIXME: Heavily relies on ipc, must be adapted for tcp.
+ */
+int SNetDistribZMQSync(int type)
+{
+  int rc = 0;
+  int i = 0;
+  char *syncaddr; 
+
+  sock_sync = zsocket_new(context, type);
+  if (!sock_sync) return -1;
+
+  syncaddr = (char *)malloc(sizeof(char) * strlen(SNetDistribZMQHostsLookup(0)));
+  strcpy(syncaddr, SNetDistribZMQHostsLookup(0));
+  strcat(syncaddr, "_s");
+
+  if (type == ZMQ_REP) {
+    rc = zsocket_bind(sock_sync, syncaddr);
+    if (rc == 0) { 
+      while (i < (SNetDistribZMQHostsCount() - 1)) {
+        char *str = zstr_recv(sock_sync);
+        free(str);
+        zstr_send(sock_sync, "");
+        i++;
+      }
+    }
+  } else if (type == ZMQ_REQ) {
+    rc = zsocket_connect(sock_sync, syncaddr); 
+    if (rc == 0) {
+      zstr_send(sock_sync, "");
+      char *str = zstr_recv(sock_sync);
+      free(str);
+    }
+  }
+
+  free(syncaddr);
+  zsocket_destroy(context, sock_sync);
+  return rc;
+}
+
 void SNetDistribZMQHostsInit(int argc, char **argv)
 {
-  int i;
+  int i, rc;
   host_table = NULL;
   node_location = -1;
 
@@ -80,6 +114,8 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   
   context = zctx_new();
   if (!context) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
+  zctx_set_linger(context, 1000); //wait 1s before destroying sockets
+
   sock_in = zsocket_new(context, ZMQ_PULL);
   if (!sock_in) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
 
@@ -89,40 +125,40 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     if (!sock_out[i]) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
   }
 
-  zctx_set_linger(context, 10000);
-
-  int rc = zsocket_bind(sock_in, SNetDistribZMQHostsLookup(node_location));
-  if (rc != 0) {
-    SNetUtilDebugFatal("ZMQDistrib: Socket bind failed %d", rc);
+  rc = zsocket_bind(sock_in, SNetDistribZMQHostsLookup(node_location));
+  if (rc != 0) SNetUtilDebugFatal("ZMQDistrib: Socket bind failed %d", rc);
+   
+  //wait for all nodes to be up and running
+  if (node_location == 0) {
+    rc = SNetDistribZMQSync(ZMQ_REP);
   } else {
-    printf("ZMQDistrib: Node %d listening on %s\n", node_location, SNetDistribZMQHostsLookup(node_location));
+    rc = SNetDistribZMQSync(ZMQ_REQ);
   }
-  
+  if (rc != 0 ) SNetUtilDebugFatal("ZMQDistrib: Syncronization failed (%d)", rc);
+
 }
 
 void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
 {
   context = zctx_new();
-  if (!context)
-    SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
+  if (!context) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
 
   SNetDistribZMQHostsInit(argc, argv);
 
   for (int i = 0; i < argc; i++) {
     if (strcmp(argv[i], "-debugWait") == 0) {
       volatile int stop = 0;
-      printf("PID %d ready for attach\n", getpid());
+      printf("ZMQDistrib: PID %d on node %d listening on %s\n",
+          getpid(), node_location, SNetDistribZMQHostsLookup(node_location));
       fflush(stdout);
       while (0 == stop) sleep(5);
       break;
     } 
   }
-
 }
 
 void SNetDistribLocalStop(void)
 { 
-  printf("LocalStop called\n");
   zctx_destroy(&context);
   SNetMemFree(sock_out);
   SNetDistribZMQHostsStop();
@@ -146,18 +182,32 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
   PackInt(&source_f, 1, &node_location);
   zmsg_push(msg, source_f);
   
+  /*
+   * FIXME: There's a synchronization problem due to the ZMQ asynchronous
+   * (non-blocking)send behaviour. It can happen that a record references a
+   * network that doesn't yet exist in the local environment because the
+   * message that contain that record gets delivered before the network
+   * instantiation.
+   *
+   * The delay here introduced mitigates the issue but does NOT solve it!
+   * Therefore, a more sound and controllable communication protocol is needed.
+   * 
+   */
+  zclock_sleep(1);
+
   rc = zsocket_connect(sock_out[destination], SNetDistribZMQHostsLookup(destination)); 
   if (rc != 0) {
     SNetUtilDebugFatal("ZMQDistrib: Cannot reach node %d (%s): zsocket_connect returned (%d)",
         destination, SNetDistribZMQHostsLookup(destination), rc);
   }
 
-  printf("-> Sending (%d)\n", destination);
+  //printf("-> Sending (%d)\n", destination);
   rc = zmsg_send(&msg, sock_out[destination]);
   if (rc != 0) {
     SNetUtilDebugFatal("ZMQDistrib: Cannot send message to  %d (%s): zmsg_send returned (%d)",
         destination, SNetDistribZMQHostsLookup(destination), rc);
   }
+
 }
 
 void SNetDistribFetchRef(snet_ref_t *ref) 
@@ -186,14 +236,13 @@ snet_msg_t SNetDistribRecvMsg(void)
 
   zmsg_t *msg;
 
-  zclock_sleep(100);
   msg = zmsg_recv(sock_in); //FIXME: do some proper error checking?
   
   source_f = zmsg_pop(msg);
   type_f = zmsg_pop(msg);
   payload_f = zmsg_pop(msg);
 
-  printf("<- Recv\n");
+  //printf("<- Recv\n");
   //zframe_print(source_f, "S: ");
   //zframe_print(type_f, "T: ");
   //zframe_print(payload_f, "P: ");
@@ -246,7 +295,7 @@ void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 
 void SNetDistribBlockDest(snet_dest_t dest)
 {
-  zframe_t *payload;
+  zframe_t *payload = NULL;
   PackDest(&payload, &dest);
   SNetDistribZMQSend(payload, snet_block, dest.node);
 }
@@ -260,14 +309,14 @@ void SNetDistribUnblockDest(snet_dest_t dest)
 
 void SNetDistribUpdateBlocked(void)
 {
-  zframe_t *payload;
+  zframe_t *payload = NULL;
   PackByte(&payload, 1, 0); //FIXME: do we need empty payload messages?
   SNetDistribZMQSend(payload, snet_update, node_location);
 }
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
 {
-  zframe_t *payload;
+  zframe_t *payload = NULL;
   char data_buf[4096];
   SNetRefSerialise(ref, &payload, &PackInt, &PackByte);
   SNetInterfaceGet(SNetRefInterface(ref))->packfun(data, &data_buf);
