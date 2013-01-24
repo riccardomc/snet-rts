@@ -96,18 +96,21 @@ snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in, int loc)
 void SNetRouteNewDynamic(snet_dest_t dest)
 {
   snet_startup_fun_t fun = SNetIdToNet(dest.parent);
+  snet_locvec_t *locvec;
 
   snet_info_t *info = SNetInfoInit();
   SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(&dest),
                 (void* (*)(void*)) &SNetDestCopy);
 
-  SNetLocvecSet(info, SNetLocvecCreate());
+  locvec = SNetLocvecCreate();
+  SNetLocvecSet(info, locvec);
 
   SNetRouteDynamicEnter(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
   SNetRouteUpdate(info, fun(NULL, info, dest.dynamicLoc), dest.parentNode);
   SNetRouteDynamicExit(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
 
   SNetInfoDestroy(info);
+  SNetLocvecDestroy(locvec);
 }
 
 void SNetRouteDynamicEnter(snet_info_t *info, int dynamicIndex, int dynamicLoc,
