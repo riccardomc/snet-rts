@@ -53,12 +53,11 @@ int SNetDistribZMQSync(int type)
 {
   int rc = 0;
   int i = 0;
-  char *syncaddr; 
+  char syncaddr[256]; 
 
   sock_sync = zsocket_new(context, type);
   if (!sock_sync) return -1;
 
-  syncaddr = (char *)malloc(sizeof(char) * strlen(SNetDistribZMQHostsLookup(0)));
   strcpy(syncaddr, SNetDistribZMQHostsLookup(0));
   strcat(syncaddr, "_s");
 
@@ -81,7 +80,6 @@ int SNetDistribZMQSync(int type)
     }
   }
 
-  free(syncaddr);
   zsocket_destroy(context, sock_sync);
   return rc;
 }
@@ -111,10 +109,6 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   if (node_location == -1) {
     SNetUtilDebugFatal("ZMQDistrib: -nodeId is mandatory");
   } 
-  
-  context = zctx_new();
-  if (!context) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
-  zctx_set_linger(context, 1000); //wait 1s before destroying sockets
 
   sock_in = zsocket_new(context, ZMQ_PULL);
   if (!sock_in) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
@@ -134,14 +128,21 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   } else {
     rc = SNetDistribZMQSync(ZMQ_REQ);
   }
-  if (rc != 0 ) SNetUtilDebugFatal("ZMQDistrib: Syncronization failed (%d)", rc);
 
+  for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) {
+      rc = zsocket_connect(sock_out[i], SNetDistribZMQHostsLookup(i)); 
+    if (rc != 0) {
+      SNetUtilDebugFatal("ZMQDistrib: Cannot reach node %d (%s): zsocket_connect (%d)",
+        i, SNetDistribZMQHostsLookup(i), rc);
+    }
+  }
 }
 
 void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
 {
   context = zctx_new();
   if (!context) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
+  zctx_set_linger(context, 1000); //wait 1s before destroying sockets
 
   SNetDistribZMQHostsInit(argc, argv);
 
@@ -192,19 +193,14 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
    * The delay here introduced mitigates the issue but does NOT solve it!
    * Therefore, a more sound and controllable communication protocol is needed.
    * 
+   * Moving the connection step outside seems to have a positive impact on the
+   * problem.
    */
-  zclock_sleep(1);
+  //zclock_sleep(1);
 
-  rc = zsocket_connect(sock_out[destination], SNetDistribZMQHostsLookup(destination)); 
-  if (rc != 0) {
-    SNetUtilDebugFatal("ZMQDistrib: Cannot reach node %d (%s): zsocket_connect returned (%d)",
-        destination, SNetDistribZMQHostsLookup(destination), rc);
-  }
-
-  //printf("-> Sending (%d)\n", destination);
   rc = zmsg_send(&msg, sock_out[destination]);
   if (rc != 0) {
-    SNetUtilDebugFatal("ZMQDistrib: Cannot send message to  %d (%s): zmsg_send returned (%d)",
+    SNetUtilDebugFatal("ZMQDistrib: Cannot send message to  %d (%s): zmsg_send (%d)",
         destination, SNetDistribZMQHostsLookup(destination), rc);
   }
 
