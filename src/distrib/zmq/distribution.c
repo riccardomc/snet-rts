@@ -1,9 +1,9 @@
 /**
-* Riccardo M. Cefala                      Sun Jan  6 18:31:18 CET 2013
-*
-* ZMQ Distribution implementation attempt.
-*
-**/
+ * Riccardo M. Cefala                      Sun Jan  6 18:31:18 CET 2013
+ *
+ * ZMQ distribution layer implementation.
+ *
+ */
 
 #include <zmq.h>
 #include <czmq.h>
@@ -22,18 +22,30 @@
 #include "reference.h"
 #include "htab.h"
 
-zctx_t *context;
-void *sock_in;
-void *sock_sync;
-void **sock_out;
+#define SNET_ZMQ_DPORT 27097
+#define SNET_ZMQ_SPORT 27098
 
-htab_t *host_table;
-int node_location;
+static zctx_t *context;
+static void *sock_in;
+static void *sock_sync;
+static void **sock_out;
 
-//FIXME: These (SnetDistribZMQHosts*) will be eventually abstracted.
-char *SNetDistribZMQHostsLookup(size_t addr)
+static htab_t *host_table;
+static int node_location;
+
+/**
+ * FIXME: These (SnetDistribZMQHosts*) will be eventually abstracted.
+ */
+char *SNetDistribZMQHostsLookup(int id)
 {
-  return htab_lookup(host_table, addr);
+  htab_host_t *host = htab_lookup(host_table, id);
+  return host->host;
+}
+
+char *SNetDistribZMQHostsBind()
+{
+  htab_host_t *host = htab_lookup(host_table, node_location);
+  return host->bind;
 }
 
 void SNetDistribZMQHostsStop()
@@ -46,47 +58,59 @@ int SNetDistribZMQHostsCount()
   return htab_size(host_table);
 }
 
-/*
- *FIXME: Heavily relies on ipc, must be adapted for tcp.
- */
-int SNetDistribZMQSync(int type)
+void SNetDistribZMQConnect(void *socket, int id, int port)
 {
-  int rc = 0;
+  int rc;
+  char addr[256];
+  snprintf(addr, sizeof addr, "tcp://%s:%d/",SNetDistribZMQHostsLookup(id), port + id * 2);
+  
+  rc = zsocket_connect(socket, addr); 
+  if (rc != 0)
+    SNetUtilDebugFatal("ZMQDistrib: Cannot reach node %d (%s): zsocket_connect (%d)",
+      id, addr, rc);
+}
+
+void SNetDistribZMQBind(void *socket, int port)
+{
+  int rc;
+  char addr[256];
+  snprintf(addr, sizeof addr, "tcp://%s:%d/",SNetDistribZMQHostsBind(), port + node_location * 2);
+  
+  rc = zsocket_bind(socket, addr);
+  if (rc < 0) 
+    SNetUtilDebugFatal("ZMQDistrib: Socket bind failed (%s): zsocket_bind: (%d) ",
+        addr, rc);
+}
+
+void SNetDistribZMQSync()
+{
   int i = 0;
-  char syncaddr[256]; 
 
-  sock_sync = zsocket_new(context, type);
-  if (!sock_sync) return -1;
+  if (node_location == 0) {
+    sock_sync = zsocket_new(context, ZMQ_REP);
+    SNetDistribZMQBind(sock_sync, SNET_ZMQ_SPORT);
 
-  strcpy(syncaddr, SNetDistribZMQHostsLookup(0));
-  strcat(syncaddr, "_s");
-
-  if (type == ZMQ_REP) {
-    rc = zsocket_bind(sock_sync, syncaddr);
-    if (rc == 0) { 
-      while (i < (SNetDistribZMQHostsCount() - 1)) {
-        char *str = zstr_recv(sock_sync);
-        free(str);
-        zstr_send(sock_sync, "");
-        i++;
-      }
-    }
-  } else if (type == ZMQ_REQ) {
-    rc = zsocket_connect(sock_sync, syncaddr); 
-    if (rc == 0) {
-      zstr_send(sock_sync, "");
+    while (i < (SNetDistribZMQHostsCount() - 1)) {
       char *str = zstr_recv(sock_sync);
       free(str);
+      zstr_send(sock_sync, "");
+      i++;
     }
+
+  } else {
+    sock_sync = zsocket_new(context, ZMQ_REQ);
+    SNetDistribZMQConnect(sock_sync, 0, SNET_ZMQ_SPORT);
+    zstr_send(sock_sync, "");
+    char *str = zstr_recv(sock_sync);
+    free(str);
   }
 
   zsocket_destroy(context, sock_sync);
-  return rc;
 }
 
 void SNetDistribZMQHostsInit(int argc, char **argv)
 {
-  int i, rc;
+  int i;
   host_table = NULL;
   node_location = -1;
 
@@ -119,23 +143,13 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     if (!sock_out[i]) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
   }
 
-  rc = zsocket_bind(sock_in, SNetDistribZMQHostsLookup(node_location));
-  if (rc != 0) SNetUtilDebugFatal("ZMQDistrib: Socket bind failed %d", rc);
-   
-  //wait for all nodes to be up and running
-  if (node_location == 0) {
-    rc = SNetDistribZMQSync(ZMQ_REP);
-  } else {
-    rc = SNetDistribZMQSync(ZMQ_REQ);
-  }
+  SNetDistribZMQBind(sock_in, SNET_ZMQ_DPORT);
 
-  for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) {
-      rc = zsocket_connect(sock_out[i], SNetDistribZMQHostsLookup(i)); 
-    if (rc != 0) {
-      SNetUtilDebugFatal("ZMQDistrib: Cannot reach node %d (%s): zsocket_connect (%d)",
-        i, SNetDistribZMQHostsLookup(i), rc);
-    }
-  }
+  SNetDistribZMQSync();
+
+  for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) 
+    SNetDistribZMQConnect(sock_out[i], i, SNET_ZMQ_DPORT);
+
 }
 
 void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
@@ -165,9 +179,6 @@ void SNetDistribLocalStop(void)
   SNetDistribZMQHostsStop();
 }
 
-/**
- * Pack type and own identity to msg before sending it to destination
- */
 void SNetDistribZMQSend(zframe_t *payload, int type, int destination) 
 {
   int rc;
@@ -183,21 +194,6 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
   PackInt(&source_f, 1, &node_location);
   zmsg_push(msg, source_f);
   
-  /*
-   * FIXME: There's a synchronization problem due to the ZMQ asynchronous
-   * (non-blocking)send behaviour. It can happen that a record references a
-   * network that doesn't yet exist in the local environment because the
-   * message that contain that record gets delivered before the network
-   * instantiation.
-   *
-   * The delay here introduced mitigates the issue but does NOT solve it!
-   * Therefore, a more sound and controllable communication protocol is needed.
-   * 
-   * Moving the connection step outside seems to have a positive impact on the
-   * problem.
-   */
-  //zclock_sleep(1);
-
   rc = zmsg_send(&msg, sock_out[destination]);
   if (rc != 0) {
     SNetUtilDebugFatal("ZMQDistrib: Cannot send message to  %d (%s): zmsg_send (%d)",
@@ -333,9 +329,18 @@ void SNetDistribGlobalStop(void)
   }
 }
 
-int SNetDistribGetNodeId(void) { return node_location; }
+int SNetDistribGetNodeId(void)
+{
+  return node_location;
+}
 
-bool SNetDistribIsNodeLocation(int loc) { return node_location == loc; }
+bool SNetDistribIsNodeLocation(int loc)
+{
+  return node_location == loc;
+}
 
-bool SNetDistribIsRootNode(void) { return node_location == 0; }
+bool SNetDistribIsRootNode(void)
+{
+  return node_location == 0;
+}
 
