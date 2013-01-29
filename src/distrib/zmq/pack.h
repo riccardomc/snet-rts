@@ -95,7 +95,7 @@ inline static void ZMQUnpackByte(zframe_t **srcframe, int count, char *dst)
       char *newdst = (char *)malloc(srcframe_size - dst_size);
       
       memcpy(newdst, srcframe_data + count, srcframe_size - dst_size);
-      zframe_reset(*srcframe, srcframe_data + count, srcframe_size - dst_size);
+      zframe_reset(*srcframe, newdst, srcframe_size - dst_size);
 
       SNetMemFree(newdst);
     }

@@ -8,16 +8,18 @@
 #ifndef DISTRIBZMQHTAB_H
 #define DISTRIBZMQHTAB_H
 
-#define HTAB_HNAME_LEN 128
+#define HTAB_HNAME_LEN 256
 
 typedef struct {
-  char host[HTAB_HNAME_LEN];
-  char bind[HTAB_HNAME_LEN];
+  int data_port;
+  int sync_port;
+  char *host;
+  char *bind;
 } htab_host_t;
 
 typedef struct {
-  size_t tab_size;
-  htab_host_t tab[];
+  int size;
+  htab_host_t **tab;
 } htab_t;
 
 //Read htab from file. Returns NULL on failure.
@@ -32,8 +34,32 @@ void htab_free(htab_t *table);
 //Returns the size of an htab.
 size_t htab_size(htab_t *table);
 
+//Print htab table on stdout.
+void htab_dump(htab_t *table);
+
 //Returns the host item at index in tab. Returns NULL on failure.
 htab_host_t *htab_lookup(htab_t *table, size_t index);
 
+//Serialise the host item host in buf.
+void htab_host_pack(htab_host_t *host, void *buf,
+    void (*packInt)(void *, int, int *),
+    void (*packByte)(void *, int, char *));
+
+//Deserialise an host item from buf and return it.
+htab_host_t *htab_host_unpack(void *buf, 
+    void (*packInt)(void *, int, int *),
+    void (*packByte)(void *, int, char *));
+
+//Serialise the host table table in buf.
+  void htab_pack(htab_t *table, void *buf,
+    void (*packInt)(void *, int, int *),
+    void (*packByte)(void *, int, char *));
+
+//Deserialise an host table from buf and return it.
+htab_t *htab_unpack(void *buf,
+    void (*packInt)(void *, int, int *),
+    void (*packByte)(void *, int, char *));
+
+char *htab_gethostname(void);
 #endif
 
