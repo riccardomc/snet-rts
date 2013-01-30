@@ -209,6 +209,10 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     SNetUtilDebugFatal("ZMQDistrib: <[-root <net_size>] | [-raddr <root_addr]>");
   }
 
+  context = zctx_new();
+  if (!context) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
+  zctx_set_linger(context, 1000); //wait 1s before destroying sockets
+
   sock_in = zsocket_new(context, ZMQ_PULL);
   if (!sock_in) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
   
@@ -227,33 +231,6 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
 
   for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) 
     SNetDistribZMQConnect(sock_out[i], i, host_table->tab[i]->data_port);
-}
-
-void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
-{
-  context = zctx_new();
-  if (!context) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
-  zctx_set_linger(context, 1000); //wait 1s before destroying sockets
-
-  SNetDistribZMQHostsInit(argc, argv);
-
-  for (int i = 0; i < argc; i++) {
-    if (strcmp(argv[i], "-debugWait") == 0) {
-      volatile int stop = 0;
-      printf("ZMQDistrib: PID %d on node %d listening on %s\n",
-          getpid(), node_location, SNetDistribZMQHostsLookup(node_location));
-      fflush(stdout);
-      while (0 == stop) sleep(5);
-      break;
-    } 
-  }
-}
-
-void SNetDistribLocalStop(void)
-{ 
-  zctx_destroy(&context);
-  SNetMemFree(sock_out);
-  SNetDistribZMQHostsStop();
 }
 
 void SNetDistribZMQSend(zframe_t *payload, int type, int destination) 
@@ -279,6 +256,30 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
         destination, SNetDistribZMQHostsLookup(destination), rc);
   }
 
+}
+
+void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
+{
+
+  SNetDistribZMQHostsInit(argc, argv);
+
+  for (int i = 0; i < argc; i++) {
+    if (strcmp(argv[i], "-debugWait") == 0) {
+      volatile int stop = 0;
+      printf("ZMQDistrib: PID %d on node %d listening on %s\n",
+          getpid(), node_location, SNetDistribZMQHostsLookup(node_location));
+      fflush(stdout);
+      while (0 == stop) sleep(5);
+      break;
+    } 
+  }
+}
+
+void SNetDistribLocalStop(void)
+{ 
+  zctx_destroy(&context);
+  SNetMemFree(sock_out);
+  SNetDistribZMQHostsStop();
 }
 
 void SNetDistribFetchRef(snet_ref_t *ref) 
