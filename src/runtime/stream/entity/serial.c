@@ -1,5 +1,7 @@
 #include <assert.h>
 
+#include "ast.h"
+#include "memfun.h"
 #include "snetentities.h"
 #include "distribution.h"
 
@@ -14,11 +16,11 @@
 /**
  * Serial connector creation function
  */
-snet_stream_t *SNetSerial(snet_stream_t *input,
+snet_stream_t *SNetSerialInst(snet_stream_t *input,
     snet_info_t *info,
     int location,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b)
+    snet_ast_t *box_a,
+    snet_ast_t *box_b)
 {
   snet_stream_t *internal_stream;
   snet_stream_t *output;
@@ -29,14 +31,26 @@ snet_stream_t *SNetSerial(snet_stream_t *input,
   enterstate = SNetLocvecSerialEnter(locvec);
 
   /* create operand A */
-  internal_stream = (*box_a)(input, info, location);
+  internal_stream = SNetInstantiate(box_a, input, info);
 
   SNetLocvecSerialNext(locvec);
 
   /* create operand B */
-  output = (*box_b)(internal_stream, info, location);
+  output = SNetInstantiate(box_b, internal_stream, info);
 
   SNetLocvecSerialLeave(locvec, enterstate);
 
   return(output);
+}
+
+snet_ast_t *SNetSerial(int location,
+                       snet_startup_fun_t box_a,
+                       snet_startup_fun_t box_b)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_serial;
+  result->serial.box_a = box_a(location);
+  result->serial.box_b = box_b(location);
+  return result;
 }

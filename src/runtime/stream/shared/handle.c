@@ -27,7 +27,7 @@ void SNetHndDestroy(snet_handle_t *hnd) {
 /**
  * Should be public
  */
-snet_record_t *SNetHndGetRecord(snet_handle_t *hnd)
+void *SNetHndGetRecord(snet_handle_t *hnd)
 { 
   return hnd->rec;
 }

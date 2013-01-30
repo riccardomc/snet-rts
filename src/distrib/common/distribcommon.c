@@ -1,5 +1,6 @@
 #include <pthread.h>
 
+#include "ast.h"
 #include "distribcommon.h"
 #include "imanager.h"
 #include "info.h"
@@ -95,7 +96,8 @@ snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in, int loc)
 
 void SNetRouteNewDynamic(snet_dest_t dest)
 {
-  snet_startup_fun_t fun = SNetIdToNet(dest.parent);
+  snet_ast_t *ast = NULL; //FIXME
+  snet_stream_t *stream;
 
   snet_info_t *info = SNetInfoInit();
   SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(&dest),
@@ -104,7 +106,8 @@ void SNetRouteNewDynamic(snet_dest_t dest)
   SNetLocvecSet(info, SNetLocvecCreate());
 
   SNetRouteDynamicEnter(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
-  SNetRouteUpdate(info, fun(NULL, info, dest.dynamicLoc), dest.parentNode);
+  stream = SNetInstantiate(ast, NULL, info);
+  SNetRouteUpdate(info, stream, dest.parentNode);
   SNetRouteDynamicExit(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
 
   SNetInfoDestroy(info);

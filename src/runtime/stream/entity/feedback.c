@@ -10,6 +10,7 @@
  */
 #include <assert.h>
 
+#include "ast.h"
 #include "snetentities.h"
 
 #include "expression.h"
@@ -265,8 +266,6 @@ static void FeedbackDispTask(void *arg)
       SNetStreamClose(fbdarg->outstream,  false);
       SNetStreamClose(fbdarg->backstream, false);
 
-      SNetVariantListDestroy( fbdarg->back_patterns);
-      SNetExprListDestroy( fbdarg->guards);
       SNetMemFree( fbdarg);
       return;
 
@@ -441,13 +440,12 @@ static void FeedbackBufTask(void *arg)
 /****************************************************************************/
 /* CREATION FUNCTION                                                        */
 /****************************************************************************/
-snet_stream_t *SNetFeedback( snet_stream_t *input,
+snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
     snet_info_t *info,
     int location,
     snet_variant_list_t *back_patterns,
     snet_expr_list_t *guards,
-    snet_startup_fun_t box_a
-    )
+    snet_ast_t *box_a)
 {
   snet_stream_t *output;
   snet_locvec_t *locvec;
@@ -500,7 +498,7 @@ snet_stream_t *SNetFeedback( snet_stream_t *input,
           "<fbcoll>", &FeedbackCollTask, fbcarg);
 
     /* create the instance network */
-    from_op = box_a(into_op, info, location);
+    from_op = SNetInstantiate(box_a, into_op, info);
     from_op = SNetRouteUpdate(info, from_op, location);
 
     /* create the feedback dispatcher */
@@ -516,11 +514,25 @@ snet_stream_t *SNetFeedback( snet_stream_t *input,
   } else {
     SNetVariantListDestroy(back_patterns);
     SNetExprListDestroy(guards);
-    output = box_a(input, info, location);
+    output = SNetInstantiate(box_a, input, info);
     output = SNetRouteUpdate(info, output, location);
   }
 
   SNetLocvecFeedbackLeave(locvec);
 
-  return( output);
+  return output;
+}
+
+snet_ast_t *SNetFeedback(int location,
+                         snet_variant_list_t *back_patterns,
+                         snet_expr_list_t *guards,
+                         snet_startup_fun_t box_a)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_feedback;
+  result->feedback.back_patterns = back_patterns;
+  result->feedback.guards = guards;
+  result->feedback.box_a = box_a(location);
+  return result;
 }

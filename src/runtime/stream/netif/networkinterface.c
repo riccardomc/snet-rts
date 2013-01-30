@@ -26,6 +26,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
+#include "ast.h"
 #include "output.h"
 #include "input.h"
 #include "observers.h"
@@ -263,8 +264,9 @@ int SNetInRun(int argc, char **argv,
   locvec = SNetLocvecCreate();
   SNetLocvecSet(info, locvec);
 
+  snet_ast_t *ast = fun(0);
   input_stream = SNetStreamCreate(0);
-  output_stream = fun(input_stream, info, 0);
+  output_stream = SNetInstantiate(ast, input_stream, info);
   output_stream = SNetRouteUpdate(info, output_stream, 0);
 
   SNetDistribStart();
@@ -278,6 +280,7 @@ int SNetInRun(int argc, char **argv,
   }
 
   SNetDistribWaitExit(info);
+  SNetASTCleanup(ast);
 
   /* tell the threading layer that it is ok to shutdown,
      and wait until it has stopped such that it can be cleaned up */

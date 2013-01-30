@@ -26,6 +26,7 @@
 
 #include <assert.h>
 
+#include "ast.h"
 #include "snetentities.h"
 #include "bool.h"
 #include "memfun.h"
@@ -139,8 +140,6 @@ typedef struct {
 static void TerminateSyncBoxTask(sync_arg_t *sarg)
 {
   SNetMemFree( sarg->storage);
-  SNetVariantListDestroy( sarg->patterns);
-  SNetExprListDestroy( sarg->guard_exprs);
   SNetMemFree( sarg);
 }
 
@@ -276,7 +275,7 @@ static void SyncBoxTask(void *arg)
 /**
  * Synchro-Box creation function
  */
-snet_stream_t *SNetSync( snet_stream_t *input,
+snet_stream_t *SNetSyncInst( snet_stream_t *input,
     snet_info_t *info,
     int location,
     snet_variant_list_t *patterns,
@@ -322,4 +321,16 @@ snet_stream_t *SNetSync( snet_stream_t *input,
   }
 
   return output;
+}
+
+snet_ast_t *SNetSync(int location,
+                     snet_variant_list_t *patterns,
+                     snet_expr_list_t *guard_exprs)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_sync;
+  result->sync.patterns = patterns;
+  result->sync.guard_exprs = guard_exprs;
+  return result;
 }

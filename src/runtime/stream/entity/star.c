@@ -1,5 +1,6 @@
 #include <assert.h>
 
+#include "ast.h"
 #include "snetentities.h"
 
 #include "expression.h"
@@ -25,7 +26,8 @@ typedef struct {
      a non-null value indicates that the instance has been created. */
   snet_stream_desc_t *nextstream;
   snet_variant_list_t *exit_patterns;
-  snet_startup_fun_t box, selffun;
+  snet_ast_t *box;
+  snet_ast_t *selffun;
   snet_expr_list_t *guards;
   bool is_det, is_incarnate;
   int location;
@@ -62,8 +64,8 @@ static bool MatchesExitPattern( snet_record_t *rec,
 static snet_stream_t *SNetSerialStarchild(snet_stream_t *input,
     snet_info_t *info,
     int location,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b)
+    snet_ast_t *box_a,
+    snet_ast_t *box_b)
 {
   snet_stream_t *internal_stream;
   snet_stream_t *output;
@@ -74,16 +76,16 @@ static snet_stream_t *SNetSerialStarchild(snet_stream_t *input,
 
   /* create operand A */
   SNetRouteDynamicEnter(info, SNetLocvecTopval(SNetLocvecGet(info)),
-                        location, box_a);
-  internal_stream = (*box_a)(input, info, location);
+                        location, NULL);
+  internal_stream = SNetInstantiate(box_a, input, info);
   internal_stream = SNetRouteUpdate(info, internal_stream, location);
   SNetRouteDynamicExit(info, SNetLocvecTopval(SNetLocvecGet(info)),
-                       location, box_a);
+                       location, NULL);
 
   assert( SNetLocvecStarWithin(SNetLocvecGet(info)) );
 
   /* create operand B */
-  output = (*box_b)(internal_stream, info, location);
+  output = SNetInstantiate(box_b, internal_stream, info);
 
   (void) SNetLocvecStarSpawnRet(locvec);
 
@@ -132,10 +134,8 @@ static void TerminateStarBoxTask(snet_stream_desc_t *outstream,
   SNetStreamClose( outstream, false);
 
   /* destroy the task argument */
-  SNetExprListDestroy( sarg->guards);
   SNetLocvecDestroy(SNetLocvecGet(sarg->info));
   SNetInfoDestroy(sarg->info);
-  SNetVariantListDestroy( sarg->exit_patterns);
   SNetMemFree( sarg);
 }
 
@@ -356,8 +356,8 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b,
+    snet_ast_t *box_a,
+    snet_ast_t *box_b,
     bool is_incarnate,
     bool is_det
     )
@@ -408,8 +408,6 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     }
 
   } else {
-    SNetExprListDestroy( guards);
-    SNetVariantListDestroy(exit_patterns);
     output = input;
   }
 
@@ -424,18 +422,36 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
 /**
  * Star creation function
  */
-snet_stream_t *SNetStar( snet_stream_t *input,
+snet_stream_t *SNetStarInst( snet_stream_t *input,
     snet_info_t *info,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b)
+    snet_ast_t *box_a,
+    snet_ast_t *box_b)
 {
   return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
       false, /* not incarnate */
       false /* not det */
       );
+}
+
+snet_ast_t *SNetStar(int location,
+                     snet_variant_list_t *exit_patterns,
+                     snet_expr_list_t *guards,
+                     snet_startup_fun_t box_a,
+                     snet_startup_fun_t box_b)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_star;
+  result->star.det = false;
+  result->star.incarnate = false;
+  result->star.exit_patterns = exit_patterns;
+  result->star.guards = guards;
+  result->star.box_a = box_a(location);
+  result->star.box_b = box_b(location);
+  return result;
 }
 
 
@@ -443,13 +459,13 @@ snet_stream_t *SNetStar( snet_stream_t *input,
 /**
  * Star incarnate creation function
  */
-snet_stream_t *SNetStarIncarnate( snet_stream_t *input,
+snet_stream_t *SNetStarIncarnateInst( snet_stream_t *input,
     snet_info_t *info,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b)
+    snet_ast_t *box_a,
+    snet_ast_t *box_b)
 {
   return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
       true, /* is incarnate */
@@ -457,18 +473,35 @@ snet_stream_t *SNetStarIncarnate( snet_stream_t *input,
       );
 }
 
+snet_ast_t *SNetStarIncarnate(int location,
+                              snet_variant_list_t *exit_patterns,
+                              snet_expr_list_t *guards,
+                              snet_startup_fun_t box_a,
+                              snet_startup_fun_t box_b)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_star;
+  result->star.det = false;
+  result->star.incarnate = true;
+  result->star.exit_patterns = exit_patterns;
+  result->star.guards = guards;
+  result->star.box_a = box_a(location);
+  result->star.box_b = result;
+  return result;
+}
 
 
 /**
  * Det Star creation function
  */
-snet_stream_t *SNetStarDet(snet_stream_t *input,
+snet_stream_t *SNetStarDetInst(snet_stream_t *input,
     snet_info_t *info,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b)
+    snet_ast_t *box_a,
+    snet_ast_t *box_b)
 {
   return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
       false, /* not incarnate */
@@ -476,21 +509,56 @@ snet_stream_t *SNetStarDet(snet_stream_t *input,
       );
 }
 
+snet_ast_t *SNetStarDet(int location,
+                        snet_variant_list_t *exit_patterns,
+                        snet_expr_list_t *guards,
+                        snet_startup_fun_t box_a,
+                        snet_startup_fun_t box_b)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_star;
+  result->star.det = true;
+  result->star.incarnate = false;
+  result->star.exit_patterns = exit_patterns;
+  result->star.guards = guards;
+  result->star.box_a = box_a(location);
+  result->star.box_b = box_b(location);
+  return result;
+}
 
 
 /**
  * Det star incarnate creation function
  */
-snet_stream_t *SNetStarDetIncarnate(snet_stream_t *input,
+snet_stream_t *SNetStarDetIncarnateInst(snet_stream_t *input,
     snet_info_t *info,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
-    snet_startup_fun_t box_a,
-    snet_startup_fun_t box_b)
+    snet_ast_t *box_a,
+    snet_ast_t *box_b)
 {
   return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
       true, /* is incarnate */
       true /* is det */
       );
+}
+
+snet_ast_t *SNetStarDetIncarnate(int location,
+                                 snet_variant_list_t *exit_patterns,
+                                 snet_expr_list_t *guards,
+                                 snet_startup_fun_t box_a,
+                                 snet_startup_fun_t box_b)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_star;
+  result->star.det = true;
+  result->star.incarnate = true;
+  result->star.exit_patterns = exit_patterns;
+  result->star.guards = guards;
+  result->star.box_a = box_a(location);
+  result->star.box_b = result;
+  return result;
 }

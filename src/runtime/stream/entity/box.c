@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <string.h>
 
+#include "ast.h"
 #include "snetentities.h"
 #include "debugtime.h"
 #include "debug.h"
@@ -115,7 +116,6 @@ static void BoxTask(void *arg)
 
       /* destroy box arg */
       SNetVariantListDestroy(barg->hnd.vars);
-      SNetIntListListDestroy(barg->hnd.sign);
       SNetMemFree( barg);
       return;
     case REC_collect:
@@ -132,7 +132,7 @@ static void BoxTask(void *arg)
 /**
  * Box creation function
  */
-snet_stream_t *SNetBox(snet_stream_t *input,
+snet_stream_t *SNetBoxInst(snet_stream_t *input,
                         snet_info_t *info,
                         int location,
                         const char *boxname,
@@ -203,4 +203,24 @@ snet_stream_t *SNetBox(snet_stream_t *input,
   }
 
   return output;
+}
+
+snet_ast_t *SNetBox(int location,
+                    const char *boxname,
+                    snet_box_fun_t boxfun,
+                    snet_exerealm_create_fun_t er_create,
+                    snet_exerealm_update_fun_t er_update,
+                    snet_exerealm_destroy_fun_t er_destroy,
+                    snet_int_list_list_t *output_variants)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_box;
+  result->box.boxname = boxname;
+  result->box.boxfun = boxfun;
+  result->box.er_create = er_create;
+  result->box.er_update = er_update;
+  result->box.er_destroy = er_destroy;
+  result->box.output_variants = output_variants;
+  return result;
 }
