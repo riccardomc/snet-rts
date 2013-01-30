@@ -31,10 +31,10 @@ void SNetDistribInit(int argc, char **argv, snet_info_t *info)
 
   prevDest = SNetInfoCreateTag();
   SNetInfoSetTag(info, prevDest, (uintptr_t) dest,
-                 (void* (*)(void*)) &SNetDestCopy);
+                 (void* (*)(void*)) &SNetDestCopy, &SNetMemFree);
 
   infoCounter = SNetInfoCreateTag();
-  SNetInfoSetTag(info, infoCounter, (uintptr_t) counter, NULL);
+  SNetInfoSetTag(info, infoCounter, (uintptr_t) counter, NULL, NULL);
 
   SNetDistribImplementationInit(argc, argv, info);
 
@@ -101,7 +101,7 @@ void SNetRouteNewDynamic(snet_dest_t dest)
 
   snet_info_t *info = SNetInfoInit();
   SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(&dest),
-                (void* (*)(void*)) &SNetDestCopy);
+                (void* (*)(void*)) &SNetDestCopy, &SNetMemFree);
 
   SNetLocvecSet(info, SNetLocvecCreate());
 
@@ -121,7 +121,7 @@ void SNetRouteDynamicEnter(snet_info_t *info, int dynamicIndex, int dynamicLoc,
 
   int *counter = SNetMemAlloc(sizeof(int));
   *counter = 0;
-  SNetInfoSetTag(info, infoCounter, (uintptr_t) counter, NULL);
+  SNetInfoSetTag(info, infoCounter, (uintptr_t) counter, NULL, NULL);
 
   if (fun != NULL) {
     dest->parent = SNetNetToId(fun);
@@ -141,6 +141,6 @@ void SNetRouteDynamicExit(snet_info_t *info, int dynamicIndex, int dynamicLoc,
   (void) fun; /* NOT USED */
 
   SNetMemFree(counter);
-  SNetInfoSetTag(info, infoCounter, (uintptr_t) NULL, NULL);
+  SNetInfoSetTag(info, infoCounter, (uintptr_t) NULL, NULL, NULL);
   return;
 }
