@@ -330,6 +330,9 @@ snet_ast_t *SNetSync(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_sync;
+  result->locvec.type = LOC_SYNC;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->sync.patterns = patterns;
   result->sync.guard_exprs = guard_exprs;
   return result;

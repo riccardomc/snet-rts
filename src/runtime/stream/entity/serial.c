@@ -49,8 +49,15 @@ snet_ast_t *SNetSerial(int location,
 {
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
+  result->locvec.type = LOC_SERIAL;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->type = snet_serial;
   result->serial.box_a = box_a(location);
+  result->serial.box_a->locvec.num = 1;
+  result->serial.box_a->locvec.parent = &result->locvec;
   result->serial.box_b = box_b(location);
+  result->serial.box_a->locvec.num = 2;
+  result->serial.box_a->locvec.parent = &result->locvec;
   return result;
 }

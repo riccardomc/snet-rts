@@ -47,7 +47,26 @@ typedef struct {
     snet_expr_list_t *guard_exprs;
 } snet_sync_t;
 
+//---------------------
 
+typedef enum {
+  LOC_SERIAL = 'S',
+  LOC_PARALLEL = 'P',
+  LOC_SPLIT = 'I',
+  LOC_STAR = 'R',
+  LOC_FEEDBACK = 'F',
+  LOC_BOX = 'B',
+  LOC_FILTER = 'L',
+  LOC_SYNC = 'Y'
+} snet_new_loctype_t;
+
+typedef struct loc_item {
+  snet_new_loctype_t type;
+  int num;
+  struct loc_item *parent;
+} snet_new_locvec_t;
+
+//---------------------
 
 typedef struct {
     snet_variant_list_t *back_patterns;
@@ -85,6 +104,7 @@ typedef struct {
 struct SNET_AST {
     int location;
     enum snet_types type;
+    snet_new_locvec_t locvec;
     union {
         snet_box_t box;
         snet_filter_translate_t filter;

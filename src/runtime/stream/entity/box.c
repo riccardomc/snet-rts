@@ -216,6 +216,9 @@ snet_ast_t *SNetBox(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_box;
+  result->locvec.type = LOC_BOX;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->box.boxname = boxname;
   result->box.boxfun = boxfun;
   result->box.er_create = er_create;

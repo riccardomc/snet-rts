@@ -408,6 +408,9 @@ snet_ast_t* SNetFilter(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_filter;
+  result->locvec.type = LOC_FILTER;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->filter.input_variant = input_variant;
   result->filter.guard_exprs = guard_exprs;
   result->filter.instr_list = instr_list;
@@ -445,6 +448,9 @@ snet_ast_t* SNetTranslate(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_translate;
+  result->locvec.type = LOC_FILTER;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->filter.input_variant = input_variant;
   result->filter.guard_exprs = guard_exprs;
   result->filter.instr_list = instr_list;
@@ -492,6 +498,9 @@ snet_ast_t *SNetNameShift(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_nameshift;
+  result->locvec.type = LOC_FILTER;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->nameshift.offset = offset;
   result->nameshift.untouched = untouched;
   result->nameshift.guard_exprs = SNetExprListCreate( 1, SNetEconsti( offset));

@@ -531,8 +531,12 @@ snet_ast_t *SNetFeedback(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_feedback;
+  result->locvec.type = LOC_FEEDBACK;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->feedback.back_patterns = back_patterns;
   result->feedback.guards = guards;
   result->feedback.box_a = box_a(location);
+  result->feedback.box_a->locvec.parent = &result->locvec;
   return result;
 }

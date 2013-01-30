@@ -445,11 +445,15 @@ snet_ast_t *SNetStar(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_star;
+  result->locvec.type = LOC_STAR;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->star.det = false;
   result->star.incarnate = false;
   result->star.exit_patterns = exit_patterns;
   result->star.guards = guards;
   result->star.box_a = box_a(location);
+  result->star.box_a->locvec.parent = &result->locvec;
   result->star.box_b = box_b(location);
   return result;
 }
@@ -482,11 +486,15 @@ snet_ast_t *SNetStarIncarnate(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_star;
+  result->locvec.type = LOC_STAR;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->star.det = false;
   result->star.incarnate = true;
   result->star.exit_patterns = exit_patterns;
   result->star.guards = guards;
   result->star.box_a = box_a(location);
+  result->star.box_a->locvec.parent = &result->locvec;
   result->star.box_b = result;
   return result;
 }
@@ -518,11 +526,15 @@ snet_ast_t *SNetStarDet(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_star;
+  result->locvec.type = LOC_STAR;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->star.det = true;
   result->star.incarnate = false;
   result->star.exit_patterns = exit_patterns;
   result->star.guards = guards;
   result->star.box_a = box_a(location);
+  result->star.box_a->locvec.parent = &result->locvec;
   result->star.box_b = box_b(location);
   return result;
 }
@@ -554,11 +566,15 @@ snet_ast_t *SNetStarDetIncarnate(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_star;
+  result->locvec.type = LOC_STAR;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->star.det = true;
   result->star.incarnate = true;
   result->star.exit_patterns = exit_patterns;
   result->star.guards = guards;
   result->star.box_a = box_a(location);
+  result->star.box_a->locvec.parent = &result->locvec;
   result->star.box_b = result;
   return result;
 }

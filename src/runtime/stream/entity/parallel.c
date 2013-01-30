@@ -589,6 +589,9 @@ snet_ast_t *SNetParallel(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_parallel;
+  result->locvec.type = LOC_PARALLEL;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->parallel.det = false;
   result->parallel.variant_lists = variant_lists;
   result->parallel.branches = SNetMemAlloc(num * sizeof(snet_ast_t*));
@@ -597,6 +600,8 @@ snet_ast_t *SNetParallel(int location,
   for (int i = 0; i < num; i++) {
     fun = va_arg(args, snet_startup_fun_t);
     result->parallel.branches[i] = fun(location);
+    result->parallel.branches[i]->locvec.num = i;
+    result->parallel.branches[i]->locvec.parent = &result->locvec;
   }
   va_end( args);
   return result;
@@ -628,6 +633,9 @@ snet_ast_t *SNetParallelDet(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_parallel;
+  result->locvec.type = LOC_PARALLEL;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->parallel.det = true;
   result->parallel.variant_lists = variant_lists;
   result->parallel.branches = SNetMemAlloc(num * sizeof(snet_ast_t*));
@@ -636,6 +644,8 @@ snet_ast_t *SNetParallelDet(int location,
   for (int i = 0; i < num; i++) {
     fun = va_arg(args, snet_startup_fun_t);
     result->parallel.branches[i] = fun(location);
+    result->parallel.branches[i]->locvec.num = i;
+    result->parallel.branches[i]->locvec.parent = &result->locvec;
   }
   va_end( args);
   return result;

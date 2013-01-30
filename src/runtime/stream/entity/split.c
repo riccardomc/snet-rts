@@ -294,6 +294,9 @@ snet_ast_t *SNetSplit(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_split;
+  result->locvec.type = LOC_SPLIT;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->split.det = false;
   result->split.loc = false;
   result->split.box_a = box_a(location);
@@ -327,6 +330,9 @@ snet_ast_t *SNetSplitDet(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_split;
+  result->locvec.type = LOC_SPLIT;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->split.det = true;
   result->split.loc = false;
   result->split.box_a = box_a(location);
@@ -358,6 +364,9 @@ snet_ast_t *SNetLocSplit(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_split;
+  result->locvec.type = LOC_SPLIT;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->split.det = false;
   result->split.loc = true;
   result->split.box_a = box_a(-1);
@@ -389,6 +398,9 @@ snet_ast_t *SNetLocSplitDet(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->type = snet_split;
+  result->locvec.type = LOC_SPLIT;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
   result->split.det = true;
   result->split.loc = true;
   result->split.box_a = box_a(-1);
