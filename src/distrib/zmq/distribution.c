@@ -87,7 +87,7 @@ void SNetDistribZMQBind(void *socket, int port)
       SNetDistribZMQHostsBind(), port);
       //SNetDistribZMQHostsBind(), port + node_location * 2);
   if (rc < 0) 
-    SNetUtilDebugFatal("ZMQDistrib: Socket bind failed (%s): zsocket_bind: (%d) ", rc);
+    SNetUtilDebugFatal("ZMQDistrib: Socket bind failed: zsocket_bind: (%d) ", rc);
 }
 
 void SNetDistribZMQSync()
@@ -118,74 +118,69 @@ void SNetDistribZMQSync()
 
 void SNetDistribZMQJoin()
 {
-  void *sock;
+  void *sockp;
+  void *sockq;
   char *hostname;
-  char host_s[270];
   zframe_t *htab_f = NULL;
 
-  sock = zsocket_new(context, ZMQ_REQ);
-  zsocket_connect(sock, root_addr);
+  sockp = zsocket_new(context, ZMQ_REP);
+  sockq = zsocket_new(context, ZMQ_REQ);
+  zsocket_bind(sockp, "tcp://*:%d/", sync_port);
+  zsocket_connect(sockq, root_addr);
 
   hostname = htab_gethostname();
-  sprintf(host_s, "%s %d %d", hostname, data_port, sync_port);
-  free(hostname);
-
-  zstr_send(sock, host_s); //send host info
-  char *str = zstr_recv(sock); //recv id
+  zstr_sendf(sockq, "%s %d %d", hostname, data_port, sync_port); //send host info
+  char *str = zstr_recv(sockq); //recv id
   node_location = atoi(str);
+  free(hostname);
   free(str);
 
-  zsocket_destroy(context, sock);
-  sock = zsocket_new(context, ZMQ_REP);
-  zsocket_bind(sock, "tcp://*:%d/", sync_port);
-  htab_f = zframe_recv(sock); //recv host table
+  htab_f = zframe_recv(sockp); //recv host table
+  zstr_send(sockp, ""); //send ack
   host_table = htab_unpack(&htab_f, &UnpackInt, &UnpackByte);
-  zstr_send(sock, ""); //send ack
   zframe_destroy(&htab_f);
-  //zsocket_destroy(context, sock);
 }
 
 void SNetDistribZMQRoot()
 {
-  void *sock;
+  void *sockp;
   int h;
-  char count_s[10];
+  char *hostname;
   zframe_t *htab_f = NULL;
 
-  sock = zsocket_new(context, ZMQ_REP);
-  zsocket_bind(sock, "tcp://*:%d/", sync_port);
+  sockp = zsocket_new(context, ZMQ_REP);
+  zsocket_bind(sockp, "tcp://*:%d/", sync_port);
 
+  hostname = htab_gethostname();
   host_table = htab_alloc(net_size);
-
-  strcpy(host_table->tab[0]->host, htab_gethostname());
+  strcpy(host_table->tab[0]->host, hostname);
   strcpy(host_table->tab[0]->bind, "*");
   host_table->tab[0]->sync_port = sync_port;
   host_table->tab[0]->data_port = data_port;
+  free(hostname);
 
   for (h = 1; h < net_size; h++) {  
-    char *str = zstr_recv(sock); //receive hostname
+    char *str = zstr_recv(sockp); //receive hostname
+    zstr_sendf(sockp, "%d", h); //reply with id
     sscanf(str, "%s %d %d", host_table->tab[h]->host,
         &host_table->tab[h]->data_port,
         &host_table->tab[h]->sync_port);
     strcpy(host_table->tab[h]->bind, "*");
     free(str);
-    sprintf(count_s, "%d", h);
-    zstr_send(sock, count_s); //reply with id
   }
-  
-  //zsocket_destroy(context, sock);
-  sock = zsocket_new(context, ZMQ_REQ);
+
   htab_pack(host_table, &htab_f, &PackInt, &PackByte);
 
   for (h = 1; h < net_size; h++) {
-    SNetDistribZMQConnect(sock, h, host_table->tab[h]->sync_port);
-    zframe_send(&htab_f, sock, ZFRAME_REUSE); //send host table
-    char *str = zstr_recv(sock); //receive ack
+    void *sockq = zsocket_new(context, ZMQ_REQ);
+    SNetDistribZMQConnect(sockq, h, host_table->tab[h]->sync_port);
+    zframe_send(&htab_f, sockq, ZFRAME_REUSE); //send host table
+    char *str = zstr_recv(sockq); //receive ack
     free(str);
-    SNetDistribZMQDisconnect(sock, h, host_table->tab[h]->sync_port);
+    zsocket_destroy(context, sockq);
   }
+  zsocket_destroy(context, sockp);
   zframe_destroy(&htab_f);
-  zsocket_destroy(context, sock);
 }
 
 void SNetDistribZMQHostsInit(int argc, char **argv)
@@ -198,13 +193,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   net_size = 1;
 
   for (i = 0; i < argc; i++) {
-    if (strcmp(argv[i], "-nodesTable") == 0) {
-      if ((i + 1) < argc) {
-        host_table = htab_fread(argv[i+1]);
-        if (!host_table)
-          SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
-      }
-    } else if (strcmp(argv[i], "-raddr") == 0) {
+    if (strcmp(argv[i], "-raddr") == 0) {
       strcpy(root_addr, argv[i+1]);
     } else if (strcmp(argv[i], "-sport") == 0) {
       sync_port = atoi(argv[i+1]);
@@ -215,35 +204,27 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
       node_location = 0;
     }
   }
-
-  /*
-  if (host_table == NULL) {
-    SNetUtilDebugFatal("ZMQDistrib: -nodesTable is mandatory");
+  
+  if ((strcmp(root_addr, "") == 0) && (node_location != 0)) {
+    SNetUtilDebugFatal("ZMQDistrib: <[-root <net_size>] | [-raddr <root_addr]>");
   }
 
-  if (node_location == -1) {
-    SNetUtilDebugFatal("ZMQDistrib: -nodeId is mandatory");
-  }
-  */
-
+  sock_in = zsocket_new(context, ZMQ_PULL);
+  if (!sock_in) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
+  
+  zsocket_bind(sock_in, "tcp://*:%d", data_port);
+  
   if (node_location == 0)
     SNetDistribZMQRoot();
   else 
     SNetDistribZMQJoin();
   
-  sock_in = zsocket_new(context, ZMQ_PULL);
-  if (!sock_in) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
-
   sock_out = SNetMemAlloc(SNetDistribZMQHostsCount() * sizeof(void *));
   for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) {
     sock_out[i] = zsocket_new(context, ZMQ_PUSH);
     if (!sock_out[i]) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
   }
 
-  SNetDistribZMQBind(sock_in, data_port);
-
-  SNetDistribZMQSync();
-  
   for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) 
     SNetDistribZMQConnect(sock_out[i], i, host_table->tab[i]->data_port);
 }
