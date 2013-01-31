@@ -1,12 +1,133 @@
+#include <math.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ast.h"
 #include "debug.h"
+#include "list.h"
 #include "memfun.h"
 #include "snetentities.h"
 #include "distribution.h"
 
-snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info, int location)
+static snet_info_tag_t id_tag;
+
+void SNetIdInit(snet_info_t *info)
+{
+  id_tag = SNetInfoCreateTag();
+  SNetInfoSetTag(info, id_tag, (uintptr_t) SNetIntListCreate(0), (void *(*)(void *)) &SNetIntListCopy, (void (*)(void *)) &SNetIntListDestroy);
+}
+
+void SNetIdSet(snet_info_t *info, snet_id_t *id)
+{ SNetInfoSetTag(info, id_tag, (uintptr_t) id,
+                 (void *(*)(void *)) &SNetIntListCopy,
+                 (void (*)(void *)) &SNetIntListDestroy);
+}
+
+snet_id_t *SNetIdGet(snet_info_t *info)
+{ return (snet_id_t*) SNetInfoGetTag(info, id_tag); }
+
+void SNetIdAppend(snet_info_t *info, int i)
+{ SNetIntListAppendStart(SNetIdGet(info), i); }
+
+void SNetIdInc(snet_info_t *info)
+{
+  int i = SNetIntListPopStart(SNetIdGet(info));
+  SNetIntListAppendStart(SNetIdGet(info), i+1);
+}
+
+int SNetIdTop(snet_info_t *info)
+{ return SNetIntListGet(SNetIdGet(info), 0); }
+
+inline static int max(int x, int y) { return x > y ? x : y; }
+
+//The number of characters required to print a number in decimal notation
+inline static int num_digits(int x)
+{
+  if (x == 0) return 1;
+  else return ceil(log10(x + 1));
+}
+inline static bool parentStarOrSplit(snet_new_locvec_t *l)
+{ return l && l->parent && (l->parent->type == LOC_SPLIT || l->parent->type == LOC_STAR); }
+
+static int locvecSize(snet_id_t *id, snet_new_locvec_t *locvec, int *idx)
+{
+  int result = 0;
+  if (!locvec) return 0;
+  else if (locvec->parent) result += locvecSize(id, locvec->parent, idx);
+
+  if (locvec->num >= 0) {
+    result += num_digits(locvec->num);
+  } else if (parentStarOrSplit(locvec)) {
+    result += num_digits(SNetIntListGet(id, (*idx)++));
+  }
+
+  switch (locvec->type) {
+    case LOC_BOX:
+    case LOC_FILTER:
+    case LOC_SYNC:
+      break;
+    case LOC_SERIAL:
+    case LOC_PARALLEL:
+    case LOC_FEEDBACK:
+    case LOC_SPLIT:
+    case LOC_STAR:
+      result += 2;
+      break;
+    default:
+      SNetUtilDebugFatal("ACH, MEIN LEBEN!");
+  }
+
+  return result;
+}
+
+static int locvecPrint(char *buf, int *idx, snet_id_t *id, snet_new_locvec_t *locvec)
+{
+  int result = 0;
+  if (!locvec) return 0;
+  else if (locvec->parent) result += locvecPrint(buf, idx, id, locvec->parent);
+
+  if (locvec->num >= 0) {
+    result += sprintf(buf + result, "%d", locvec->num);
+  } else if (parentStarOrSplit(locvec)) {
+    result += sprintf(buf + result, "%d", SNetIntListGet(id, (*idx)++));
+  }
+
+  switch (locvec->type) {
+    case LOC_BOX:
+    case LOC_FILTER:
+    case LOC_SYNC:
+      break;
+    case LOC_SERIAL:
+    case LOC_PARALLEL:
+    case LOC_FEEDBACK:
+    case LOC_SPLIT:
+    case LOC_STAR:
+      result += sprintf(buf + result, ":%c", (char) locvec->type);
+      break;
+    default:
+      SNetUtilDebugFatal("ACH, MEIN LEBEN!");
+  }
+
+  return result;
+}
+
+const char *SNetNameCreate(snet_new_locvec_t *locvec, snet_id_t *id, const char *name)
+{
+  int i;
+  int namelen = name ? strlen(name) : 0;
+  int size = locvecSize(id, locvec, &i) + namelen + 1;
+  char *result = SNetMemAlloc(size);
+  i = 0;
+
+  strncpy(result, name, namelen);
+  locvecPrint(result + namelen, &i, id, locvec);
+  result[size-1] = '\0';
+
+  return result;
+}
+
+snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input,
+                                        snet_info_t *info, int location)
 {
   location = location >= 0 ? location :
                 tree->location >= 0 ? tree->location : SNetDistribGetNodeId();
@@ -105,7 +226,8 @@ snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input, 
   return output;
 }
 
-snet_stream_t *SNetInstantiate(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info)
+snet_stream_t *SNetInstantiate(snet_ast_t *tree, snet_stream_t *input,
+                               snet_info_t *info)
 { return SNetInstantiatePlacement(tree, input, info, -1); }
 
 void SNetASTCleanup(snet_ast_t *tree)

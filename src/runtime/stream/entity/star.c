@@ -387,6 +387,10 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     sarg->exit_patterns = exit_patterns;
     sarg->guards = guards;
     sarg->info = SNetInfoCopy(info);
+
+    if (is_incarnate) SNetIdInc(sarg->info);
+    else SNetIdAppend(sarg->info, 0);
+
     SNetLocvecSet(sarg->info, SNetLocvecCopy(locvec));
     sarg->is_incarnate = is_incarnate;
     sarg->is_det = is_det;

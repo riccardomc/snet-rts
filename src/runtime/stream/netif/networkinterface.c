@@ -264,6 +264,8 @@ int SNetInRun(int argc, char **argv,
   locvec = SNetLocvecCreate();
   SNetLocvecSet(info, locvec);
 
+  SNetIdInit(info);
+
   snet_ast_t *ast = fun(0);
   input_stream = SNetStreamCreate(0);
   output_stream = SNetInstantiate(ast, input_stream, info);

@@ -78,6 +78,7 @@ static void SplitBoxTask(void *arg)
 
           /* create info and location vector for creation of this replica */
           info = SNetInfoCopy(sarg->info);
+          SNetIdAppend(info, i);
           locvec = SNetLocvecSplitSpawn(SNetLocvecGet(sarg->info), i);
           SNetLocvecSet(info, locvec);
 

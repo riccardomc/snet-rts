@@ -1,7 +1,18 @@
 #ifndef AST_H
 #define AST_H
 
+#include "list.h"
 #include "snettypes.h"
+
+typedef snet_int_list_t snet_id_t;
+
+void SNetIdInit(snet_info_t *info);
+void SNetIdAppend(snet_info_t *info, int i);
+void SNetIdInc(snet_info_t *info);
+int SNetIdTop(snet_info_t *info);
+
+void SNetIdSet(snet_info_t *info, snet_id_t *id);
+snet_id_t *SNetIdGet(snet_info_t *info);
 
 snet_stream_t *SNetInstantiate(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info);
 snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info, int location);
@@ -65,6 +76,8 @@ typedef struct loc_item {
   int num;
   struct loc_item *parent;
 } snet_new_locvec_t;
+
+const char *SNetNameCreate(snet_new_locvec_t *locvec, snet_id_t *id, const char *name);
 
 //---------------------
 
