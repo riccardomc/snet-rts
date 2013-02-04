@@ -424,3 +424,12 @@ bool SNetDistribIsRootNode(void)
   return node_location == 0;
 }
 
+void SNetDistribPack(void *src, ...)
+{
+  //TODO
+}
+
+void SNetDistribUnpack(void *dst, ...)
+{
+  //TODO
+}
