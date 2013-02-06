@@ -5,7 +5,6 @@
 #include "snetentities.h"
 
 #include "memfun.h"
-#include "locvec.h"
 #include "hashtab.h"
 #include "collector.h"
 #include "threading.h"
@@ -47,10 +46,6 @@ static void SplitBoxTask(void *arg)
   int ltag_val, utag_val;
   snet_info_t *info;
   snet_record_t *rec;
-  snet_locvec_t *locvec;
-
-
-
 
   /* read from input stream */
   rec = SNetStreamRead( sarg->instream);
@@ -79,8 +74,6 @@ static void SplitBoxTask(void *arg)
           /* create info and location vector for creation of this replica */
           info = SNetInfoCopy(sarg->info);
           SNetIdAppend(info, i);
-          locvec = SNetLocvecSplitSpawn(SNetLocvecGet(sarg->info), i);
-          SNetLocvecSet(info, locvec);
 
           if( sarg->is_byloc) {
             SNetRouteDynamicEnter(info, i, i, NULL);
@@ -95,7 +88,6 @@ static void SplitBoxTask(void *arg)
           }
 
           /* destroy info and location vector */
-          SNetLocvecDestroy(locvec);
           SNetInfoDestroy(info);
 
           if(temp_stream != NULL) {
@@ -188,7 +180,6 @@ static void SplitBoxTask(void *arg)
       /* close instream */
       SNetStreamClose( sarg->instream, true);
 
-      SNetLocvecDestroy(SNetLocvecGet(sarg->info));
       SNetInfoDestroy(sarg->info);
       /* destroy the argument */
       SNetMemFree( sarg);
@@ -217,6 +208,7 @@ static void SplitBoxTask(void *arg)
  */
 snet_stream_t *CreateSplit( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag,
@@ -227,11 +219,6 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
   snet_info_t *newInfo = SNetInfoCopy(info);
   snet_stream_t *initial, *output;
   split_arg_t *sarg;
-  snet_locvec_t *locvec;
-
-  locvec = SNetLocvecGet(info);
-  SNetLocvecSplitEnter(locvec);
-  SNetLocvecSet(newInfo, SNetLocvecCopy(locvec));
 
   input = SNetRouteUpdate(newInfo, input, location);
   if(SNetDistribIsNodeLocation(location)) {
@@ -254,19 +241,17 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
     sarg->repos_tab = HashtabCreate( 4);
 
     sarg->counter = 0;
-    SNetThreadingSpawn( ENTITY_split, location, locvec,
-          "<split>", &SplitBoxTask, sarg);
+    SNetThreadingSpawn( ENTITY_split, location, SNetNameCreate(locvec, SNetIdGet(info),
+          "<split>"), &SplitBoxTask, sarg);
 
-    output = CollectorCreateDynamic( initial, location, info);
+    output = CollectorCreateDynamic( initial, locvec, location, info);
 
   } else {
-    SNetLocvecDestroy(SNetLocvecGet(newInfo));
     SNetInfoDestroy(newInfo);
     output = input;
   }
-  SNetLocvecSplitLeave(locvec);
 
-  return( output);
+  return output;
 }
 
 
@@ -278,11 +263,12 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
  */
 snet_stream_t *SNetSplitInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, location, box_a, ltag, utag,
+  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
       false, /* not by location */
       false  /* not det */
       );
@@ -313,11 +299,12 @@ snet_ast_t *SNetSplit(int location,
  */
 snet_stream_t *SNetSplitDetInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, location, box_a, ltag, utag,
+  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
       false, /* not by location */
       true   /* is det */
       );
@@ -348,11 +335,12 @@ snet_ast_t *SNetSplitDet(int location,
  */
 snet_stream_t *SNetLocSplitInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, location, box_a, ltag, utag,
+  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
       true, /* is by location */
       false /* not det */
       );
@@ -382,11 +370,12 @@ snet_ast_t *SNetLocSplit(int location,
  */
 snet_stream_t *SNetLocSplitDetInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, location, box_a, ltag, utag,
+  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
       true, /* is by location */
       true  /* is det */
       );

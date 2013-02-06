@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include "ast.h" //FIXME
 #include "debug.h"
 #include "distribcommon.h"
 #include "imanager.h"
@@ -203,8 +204,8 @@ void SNetInputManagerInit(void)
 
 void SNetInputManagerStart(void)
 {
-  SNetThreadingSpawn( ENTITY_other, -1, NULL,
-      "input_manager", &SNetInputManager, NULL);
+  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL,
+      "input_manager"), &SNetInputManager, NULL);
 }
 
 void SNetInputManager(void *args)

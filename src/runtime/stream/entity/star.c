@@ -5,7 +5,6 @@
 
 #include "expression.h"
 #include "memfun.h"
-#include "locvec.h"
 #include "collector.h"
 #include "debug.h"
 
@@ -20,6 +19,7 @@
  */
 typedef struct {
   snet_info_t *info;
+  snet_locvec_t *locvec;
   snet_stream_desc_t *instream;
   snet_stream_desc_t *outstream; /* the stream to the collector */
   /* The stream to the next instance;
@@ -69,25 +69,17 @@ static snet_stream_t *SNetSerialStarchild(snet_stream_t *input,
 {
   snet_stream_t *internal_stream;
   snet_stream_t *output;
-  snet_locvec_t *locvec;
 
-  locvec = SNetLocvecGet(info);
-  (void) SNetLocvecStarSpawn(locvec);
+  int i = SNetIdTop(info);
 
   /* create operand A */
-  SNetRouteDynamicEnter(info, SNetLocvecTopval(SNetLocvecGet(info)),
-                        location, NULL);
+  SNetRouteDynamicEnter(info, i, location, NULL);
   internal_stream = SNetInstantiate(box_a, input, info);
   internal_stream = SNetRouteUpdate(info, internal_stream, location);
-  SNetRouteDynamicExit(info, SNetLocvecTopval(SNetLocvecGet(info)),
-                       location, NULL);
-
-  assert( SNetLocvecStarWithin(SNetLocvecGet(info)) );
+  SNetRouteDynamicExit(info, i, location, NULL);
 
   /* create operand B */
   output = SNetInstantiate(box_b, internal_stream, info);
-
-  (void) SNetLocvecStarSpawnRet(locvec);
 
   return(output);
 }
@@ -109,7 +101,7 @@ static void CreateOperandNetwork(snet_stream_desc_t **next,
   nextstream_addr = SNetStreamCreate(0);
 
   /* Set the source of the stream to support garbage collection */
-  SNetStreamSetSource(nextstream_addr, SNetLocvecGet(sarg->info));
+  SNetStreamSetSource(nextstream_addr, sarg->locvec);
 
   /* open the stream for the caller */
   *next = SNetStreamOpen(nextstream_addr, 'w');
@@ -134,7 +126,6 @@ static void TerminateStarBoxTask(snet_stream_desc_t *outstream,
   SNetStreamClose( outstream, false);
 
   /* destroy the task argument */
-  SNetLocvecDestroy(SNetLocvecGet(sarg->info));
   SNetInfoDestroy(sarg->info);
   SNetMemFree( sarg);
 }
@@ -225,17 +216,15 @@ static void StarBoxTask(void *arg)
       {
         snet_stream_t *newstream = SNetRecGetStream( rec);
 #ifdef ENABLE_GC
-        snet_locvec_t *loc = SNetStreamGetSource( newstream);
+        snet_locvec_t *loc = SNetStreamGetSource(newstream);
 #ifdef DEBUG_PRINT_GC
         if (loc != NULL) {
-          int size = SNetLocvecPrintSize(loc) + 1;
-          char srecloc[size];
-          srecloc[size - 1] = '\0';
-          SNetLocvecPrint(srecloc, loc);
+          char *srecloc = SNetNameCreate(loc, NULL, ""); //FIXME
           SNetUtilDebugNoticeTask(
                 "[STAR] Notice: Received sync record with a stream with source %s.",
                 srecloc
                 );
+          SNetMemFree(srecloc);
         }
 #endif
         /* TODO
@@ -249,8 +238,7 @@ static void StarBoxTask(void *arg)
          * (subsequent) star dispatcher entities of the same star combinator network
          * -> if so, we can clean-up ourselves
          */
-        if ( sarg->is_incarnate && loc != NULL ) {
-          assert( true == SNetLocvecEqualParent(loc, SNetLocvecGet(sarg->info)) );
+        if ( sarg->is_incarnate && loc != NULL ) { //FIXME compare parent
           /* If the next instance is already created, we can forward the sync-record
            * immediately and terminate.
            * Otherwise we postpone termination to the point when a next data record
@@ -353,6 +341,7 @@ static void StarBoxTask(void *arg)
  */
 static snet_stream_t *CreateStar( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
@@ -365,16 +354,8 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
   snet_stream_t *output;
   star_arg_t *sarg;
   snet_stream_t *newstream;
-  snet_locvec_t *locvec;
 
-  locvec = SNetLocvecGet(info);
-  if (!is_incarnate) {
-    SNetLocvecStarEnter(locvec);
-    input = SNetRouteUpdate(info, input, location);
-  } else {
-    input = SNetRouteUpdate(info, input, location);
-  }
-
+  input = SNetRouteUpdate(info, input, location);
   if(SNetDistribIsNodeLocation(location)) {
     /* create the task argument */
     sarg = SNetMemAlloc( sizeof(star_arg_t));
@@ -382,6 +363,7 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     sarg->instream = SNetStreamOpen(input, 'r');
     sarg->outstream = SNetStreamOpen(newstream, 'w');
     sarg->nextstream = NULL;
+    sarg->locvec = locvec;
     sarg->box = box_a;
     sarg->selffun = box_b;
     sarg->exit_patterns = exit_patterns;
@@ -391,22 +373,21 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     if (is_incarnate) SNetIdInc(sarg->info);
     else SNetIdAppend(sarg->info, 0);
 
-    SNetLocvecSet(sarg->info, SNetLocvecCopy(locvec));
     sarg->is_incarnate = is_incarnate;
     sarg->is_det = is_det;
     sarg->location = location;
     sarg->sync_cleanup = false;
     sarg->counter = 0;
 
-    SNetThreadingSpawn( ENTITY_star, location, locvec,
-          "<star>", &StarBoxTask, sarg);
+    SNetThreadingSpawn( ENTITY_star, location, SNetNameCreate(locvec, SNetIdGet(info),
+          "<star>"), &StarBoxTask, sarg);
 
     /* creation function of top level star will return output stream
      * of its collector, the incarnates return their outstream
      */
     if (!is_incarnate) {
       /* the "top-level" star also creates a collector */
-      output = CollectorCreateDynamic(newstream, location, info);
+      output = CollectorCreateDynamic(newstream, locvec, location, info);
     } else {
       output = newstream;
     }
@@ -415,9 +396,7 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     output = input;
   }
 
-  if (!is_incarnate) SNetLocvecStarLeave(SNetLocvecGet(info));
-
-  return( output);
+  return output;
 }
 
 
@@ -428,13 +407,14 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
  */
 snet_stream_t *SNetStarInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
     snet_ast_t *box_a,
     snet_ast_t *box_b)
 {
-  return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
+  return CreateStar( input, info, locvec, location, exit_patterns, guards, box_a, box_b,
       false, /* not incarnate */
       false /* not det */
       );
@@ -469,13 +449,14 @@ snet_ast_t *SNetStar(int location,
  */
 snet_stream_t *SNetStarIncarnateInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
     snet_ast_t *box_a,
     snet_ast_t *box_b)
 {
-  return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
+  return CreateStar( input, info, locvec, location, exit_patterns, guards, box_a, box_b,
       true, /* is incarnate */
       false /* not det */
       );
@@ -509,13 +490,14 @@ snet_ast_t *SNetStarIncarnate(int location,
  */
 snet_stream_t *SNetStarDetInst(snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
     snet_ast_t *box_a,
     snet_ast_t *box_b)
 {
-  return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
+  return CreateStar( input, info, locvec, location, exit_patterns, guards, box_a, box_b,
       false, /* not incarnate */
       true /* is det */
       );
@@ -549,13 +531,14 @@ snet_ast_t *SNetStarDet(int location,
  */
 snet_stream_t *SNetStarDetIncarnateInst(snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
     snet_ast_t *box_a,
     snet_ast_t *box_b)
 {
-  return CreateStar( input, info, location, exit_patterns, guards, box_a, box_b,
+  return CreateStar( input, info, locvec, location, exit_patterns, guards, box_a, box_b,
       true, /* is incarnate */
       true /* is det */
       );

@@ -103,8 +103,6 @@ void SNetRouteNewDynamic(snet_dest_t dest)
   SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(&dest),
                 (void* (*)(void*)) &SNetDestCopy, &SNetMemFree);
 
-  SNetLocvecSet(info, SNetLocvecCreate());
-
   SNetRouteDynamicEnter(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
   stream = SNetInstantiate(ast, NULL, info);
   SNetRouteUpdate(info, stream, dest.parentNode);

@@ -32,7 +32,6 @@
 #include "memfun.h"
 #include "threading.h"
 #include "distribution.h"
-#include "locvec.h"
 #include "debug.h"
 #include "moninfo.h"
 
@@ -210,7 +209,8 @@ static void SyncBoxTask(void *arg)
 #ifdef SYNC_SEND_OUTTYPES
         /* if we read from a star entity, we store the outtype along
            with the sync record */
-        if( SNetStreamGetSource( SNetStreamGet(sarg->instream)) != NULL ) {
+        snet_locvec_t *locvec = SNetStreamGetSource(SNetStreamGet(sarg->instream));
+        if (locvec != NULL ) {
           /*
            * To trigger garbage collection at a following parallel dispatcher
            * within a state-modeling network, the dispatcher needs knowledge about the
@@ -277,15 +277,13 @@ static void SyncBoxTask(void *arg)
  */
 snet_stream_t *SNetSyncInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *patterns,
     snet_expr_list_t *guard_exprs )
 {
   snet_stream_t *output;
   sync_arg_t *sarg;
-  snet_locvec_t *locvec;
-
-  locvec = SNetLocvecGet(info);
 
   input = SNetRouteUpdate(info, input, location);
   if(SNetDistribIsNodeLocation(location)) {
@@ -312,8 +310,8 @@ snet_stream_t *SNetSyncInst( snet_stream_t *input,
       sarg->storage[i] = &sarg->dummy;
     }
 
-    SNetThreadingSpawn( ENTITY_sync, location, locvec,
-          "<sync>", &SyncBoxTask, sarg);
+    SNetThreadingSpawn( ENTITY_sync, location, SNetNameCreate(locvec, SNetIdGet(info),
+          "<sync>"), &SyncBoxTask, sarg);
   } else {
     SNetVariantListDestroy( patterns);
     SNetExprListDestroy( guard_exprs);

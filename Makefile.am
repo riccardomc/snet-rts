@@ -25,6 +25,7 @@ pkginclude_HEADERS = \
 	src/interfaces/c4snet/C4SNet.h \
 	src/interfaces/c4snet/C4SNetc.h \
 	include/atomiccnt.h \
+	include/ast.h \
 	include/bool.h \
 	include/constants.h \
 	include/debug.h \
@@ -39,7 +40,6 @@ pkginclude_HEADERS = \
 	include/list-template.h \
 	include/list-template.c \
 	include/list.h \
-	include/locvec.h \
 	include/map-template.h \
 	include/map-template.c \
 	include/map.h \
@@ -85,7 +85,6 @@ libruntimestream_la_SOURCES = \
 	src/runtime/stream/utils/hashtab.h \
 	src/runtime/stream/utils/hashtable.c \
 	src/runtime/stream/utils/hashtable.h \
-	src/runtime/stream/utils/locvec.c \
 	src/runtime/stream/utils/queue.c \
 	src/runtime/stream/utils/queue.h \
 	src/runtime/stream/shared/handle.c \

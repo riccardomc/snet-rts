@@ -43,7 +43,6 @@ typedef struct {
 #include "variant.h"
 #include "stream.h"
 #include "bool.h"
-#include "locvec.h"
 
 
 #define LIST_NAME_H RecId /* SNetRecIdListFUNC */

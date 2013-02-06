@@ -5,8 +5,6 @@
 #include "snetentities.h"
 #include "distribution.h"
 
-#include "locvec.h"
-
 /* ------------------------------------------------------------------------- */
 /*  SNetSerial                                                               */
 /* ------------------------------------------------------------------------- */
@@ -18,27 +16,19 @@
  */
 snet_stream_t *SNetSerialInst(snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     snet_ast_t *box_b)
 {
   snet_stream_t *internal_stream;
   snet_stream_t *output;
-  snet_locvec_t *locvec;
-  bool enterstate;
-
-  locvec = SNetLocvecGet(info);
-  enterstate = SNetLocvecSerialEnter(locvec);
 
   /* create operand A */
   internal_stream = SNetInstantiate(box_a, input, info);
 
-  SNetLocvecSerialNext(locvec);
-
   /* create operand B */
   output = SNetInstantiate(box_b, internal_stream, info);
-
-  SNetLocvecSerialLeave(locvec, enterstate);
 
   return(output);
 }

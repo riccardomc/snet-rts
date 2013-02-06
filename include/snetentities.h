@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 
+#include "ast.h"
 #include "handle.h"
 #include "constants.h"
 #include "expression.h"
@@ -35,6 +36,7 @@ snet_ast_t *SNetBox(int location,
 
 snet_stream_t *SNetBoxInst(snet_stream_t *input,
                         snet_info_t *info,
+                        snet_locvec_t *locvec,
                         int location,
                         const char *boxname,
                         snet_box_fun_t boxfun,
@@ -53,6 +55,7 @@ snet_ast_t *SNetSync(int location,
 
 snet_stream_t *SNetSyncInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *patterns,
     snet_expr_list_t *guard_exprs );
@@ -66,6 +69,7 @@ snet_ast_t *SNetFilter(int location,
 
 snet_stream_t* SNetFilterInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
     snet_expr_list_t *guard_exprs,
@@ -77,6 +81,7 @@ snet_ast_t *SNetTranslate(int location,
 
 snet_stream_t* SNetTranslateInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
     snet_expr_list_t *guard_exprs,
@@ -88,6 +93,7 @@ snet_ast_t *SNetNameShift(int location,
 
 snet_stream_t *SNetNameShiftInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     int offset,
     snet_variant_t *untouched,
@@ -103,6 +109,7 @@ snet_ast_t *SNetSerial(int location,
 
 snet_stream_t *SNetSerialInst(snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     snet_ast_t *box_b);
@@ -117,6 +124,7 @@ snet_ast_t *SNetParallel(int location,
 
 snet_stream_t *SNetParallelInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_list_t *variant_lists,
     snet_ast_t **ast);
@@ -127,6 +135,7 @@ snet_ast_t *SNetParallelDet(int location,
 
 snet_stream_t *SNetParallelDetInst( snet_stream_t *inbuf,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_list_t *variant_lists,
     snet_ast_t **ast);
@@ -143,6 +152,7 @@ snet_ast_t *SNetStar(int location,
 
 snet_stream_t *SNetStarInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
@@ -157,6 +167,7 @@ snet_ast_t *SNetStarIncarnate(int location,
 
 snet_stream_t *SNetStarIncarnateInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
@@ -171,6 +182,7 @@ snet_ast_t *SNetStarDet(int location,
 
 snet_stream_t *SNetStarDetInst(snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
@@ -185,6 +197,7 @@ snet_ast_t *SNetStarDetIncarnate(int location,
 
 snet_stream_t *SNetStarDetIncarnateInst(snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *exit_patterns,
     snet_expr_list_t *guards,
@@ -201,6 +214,7 @@ snet_ast_t *SNetSplit(int location,
 
 snet_stream_t *SNetSplitInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag);
@@ -212,6 +226,7 @@ snet_ast_t *SNetSplitDet(int location,
 
 snet_stream_t *SNetSplitDetInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag);
@@ -222,6 +237,7 @@ snet_ast_t *SNetLocSplit(int location,
 
 snet_stream_t *SNetLocSplitInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag);
@@ -233,6 +249,7 @@ snet_ast_t *SNetLocSplitDet(int location,
 
 snet_stream_t *SNetLocSplitDetInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_ast_t *box_a,
     int ltag, int utag);
@@ -248,6 +265,7 @@ snet_ast_t *SNetFeedback(int location,
 
 snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *back_patterns,
     snet_expr_list_t *guards,

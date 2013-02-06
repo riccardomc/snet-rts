@@ -6,7 +6,6 @@
 #include "debugtime.h"
 #include "debug.h"
 #include "memfun.h"
-#include "locvec.h"
 #include "moninfo.h"
 #include "type.h"
 #include "threading.h"
@@ -134,6 +133,7 @@ static void BoxTask(void *arg)
  */
 snet_stream_t *SNetBoxInst(snet_stream_t *input,
                         snet_info_t *info,
+                        snet_locvec_t *locvec,
                         int location,
                         const char *boxname,
                         snet_box_fun_t boxfun,
@@ -193,8 +193,8 @@ snet_stream_t *SNetBoxInst(snet_stream_t *input,
     barg->hnd.vars = vlist;
     barg->hnd = *barg->exerealm_create(&barg->hnd);
 
-    SNetThreadingSpawn( ENTITY_box, location, SNetLocvecGet(info),
-          boxname, &BoxTask, barg);
+    SNetThreadingSpawn( ENTITY_box, location, SNetNameCreate(locvec, SNetIdGet(info),
+          boxname), &BoxTask, barg);
 
 
   } else {

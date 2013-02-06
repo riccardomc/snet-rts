@@ -195,23 +195,10 @@ void SNetThreadingEventSignal(snet_moninfo_t *moninfo)
 	}
 }
 
-void SNetThreadingSpawn(snet_entity_t ent, int loc, snet_locvec_t *locvec,
-                        const char *name, snet_taskfun_t func, void *arg)
+void SNetThreadingSpawn(snet_entity_t ent, int loc, const char *name,
+                        snet_taskfun_t func, void *arg)
 {
-  int locveclen, namelen, size;
-  char *buf = NULL;
   int worker = -1;
-  /* if locvec is NULL then entity_other */
-  assert(locvec != NULL || ent == ENTITY_other);
-
-  locveclen = locvec ? SNetLocvecPrintSize(locvec) : 0;
-  namelen = name ? strlen(name) : 0;
-  size = locveclen + namelen + 2;
-  buf = SNetMemAlloc(size);
-  if (locvec) SNetLocvecPrint(buf, locvec);
-  buf[locveclen] = ' ';
-  strncpy(buf + locveclen + 1, name, namelen);
-  buf[size-1] = '\0';
 
   if (ent != ENTITY_other) {
     if (dloc_placement) {
@@ -224,7 +211,7 @@ void SNetThreadingSpawn(snet_entity_t ent, int loc, snet_locvec_t *locvec,
 
   lpel_task_t *t = LpelTaskCreate(worker, func, arg, GetStacksize(ent));
 
-  LpelSetName(t, buf);
+  LpelSetName(t, name);
   LpelSetNameDestructor(t, &SNetMemFree);
 
 #ifdef USE_LOGGING
@@ -236,7 +223,7 @@ void SNetThreadingSpawn(snet_entity_t ent, int loc, snet_locvec_t *locvec,
 
   if ((mon_flags & SNET_MON_MAP) && mapfile) {
     // FIXME: change to binary format
-    fprintf(mapfile, "%d%s %d%c", LpelTaskGetID(t), buf, worker, END_LOG_ENTRY);
+    fprintf(mapfile, "%d%s %d%c", LpelTaskGetID(t), name, worker, END_LOG_ENTRY);
   }
 
 

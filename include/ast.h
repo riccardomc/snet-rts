@@ -69,15 +69,15 @@ typedef enum {
   LOC_BOX = 'B',
   LOC_FILTER = 'L',
   LOC_SYNC = 'Y'
-} snet_new_loctype_t;
+} snet_loctype_t;
 
 typedef struct loc_item {
-  snet_new_loctype_t type;
+  snet_loctype_t type;
   int num;
   struct loc_item *parent;
-} snet_new_locvec_t;
+} snet_locvec_t;
 
-const char *SNetNameCreate(snet_new_locvec_t *locvec, snet_id_t *id, const char *name);
+const char *SNetNameCreate(snet_locvec_t *locvec, snet_id_t *id, const char *name);
 
 //---------------------
 
@@ -117,7 +117,7 @@ typedef struct {
 struct SNET_AST {
     int location;
     enum snet_types type;
-    snet_new_locvec_t locvec;
+    snet_locvec_t locvec;
     union {
         snet_box_t box;
         snet_filter_translate_t filter;

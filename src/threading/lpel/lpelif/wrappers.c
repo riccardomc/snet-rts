@@ -29,9 +29,6 @@ static void DestroyUsrdata(lpel_stream_t * ls)
 {
   usrdata_t *dat = LpelStreamGetUsrData(ls);
   if (dat != NULL) {
-    if (dat->source != NULL) {
-      SNetLocvecDestroy(dat->source);
-    }
     /* nothing to do for callback */
     /* free the usrdat container itself */
     SNetMemFree(dat);
@@ -67,7 +64,7 @@ snet_locvec_t *SNetStreamGetSource(snet_stream_t * s)
 void SNetStreamSetSource(snet_stream_t * s, snet_locvec_t * lv)
 {
   usrdata_t *dat = CheckCreateUsrdata((lpel_stream_t *) s);
-  dat->source = SNetLocvecCopy(lv);
+  dat->source = lv;
 }
 
 void SNetStreamRegisterReadCallback(snet_stream_t * s,

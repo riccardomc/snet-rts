@@ -10,7 +10,6 @@
 #include "bool.h"
 #include "record.h"
 #include "moninfo.h"
-#include "locvec.h"
 #include "snetentities.h"
 #include "debug.h"
 #include "interface_functions.h"
@@ -324,6 +323,7 @@ static void NameshiftTask(void *arg)
  */
 static snet_stream_t* CreateFilter( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
     snet_expr_list_t *guard_exprs,
@@ -342,15 +342,15 @@ static snet_stream_t* CreateFilter( snet_stream_t *instream,
       !FilterIsBypass(input_variant, guard_exprs, instr_list)) {
     outstream = SNetStreamCreate(0);
 
-    farg = (filter_arg_t *) SNetMemAlloc( sizeof( filter_arg_t));
+    farg = SNetMemAlloc( sizeof( filter_arg_t));
     farg->instream  = SNetStreamOpen(instream, 'r');
     farg->outstream = SNetStreamOpen(outstream, 'w');
     farg->input_variant = input_variant;
     farg->guard_exprs = guard_exprs;
     farg->filter_instructions = instr_list;
 
-    SNetThreadingSpawn( ENTITY_filter, location, SNetLocvecGet(info),
-          name, &FilterTask, farg);
+    SNetThreadingSpawn( ENTITY_filter, location, SNetNameCreate(locvec, SNetIdGet(info),
+          name), &FilterTask, farg);
   } else {
     outstream = instream;
   }
@@ -383,6 +383,7 @@ static snet_stream_t* CreateFilter( snet_stream_t *instream,
  */
 snet_stream_t* SNetFilterInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
     snet_expr_list_t *guard_exprs,
@@ -391,7 +392,7 @@ snet_stream_t* SNetFilterInst( snet_stream_t *instream,
   assert(input_variant != NULL);
   assert(guard_exprs != NULL);
 
-  return CreateFilter(instream, info, location, input_variant,
+  return CreateFilter(instream, info, locvec, location, input_variant,
       guard_exprs, instr_list, "<filter>");
 }
 
@@ -423,6 +424,7 @@ snet_ast_t* SNetFilter(int location,
  */
 snet_stream_t* SNetTranslateInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
     snet_expr_list_t *guard_exprs,
@@ -431,7 +433,7 @@ snet_stream_t* SNetTranslateInst( snet_stream_t *instream,
   assert(input_variant != NULL);
   assert(guard_exprs != NULL);
 
-  return CreateFilter(instream, info, location, input_variant,
+  return CreateFilter(instream, info, locvec, location, input_variant,
       guard_exprs, instr_list, "<translate>");
 }
 
@@ -462,6 +464,7 @@ snet_ast_t* SNetTranslate(int location,
  */
 snet_stream_t *SNetNameShiftInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     int offset,
     snet_variant_t *untouched,
@@ -481,8 +484,8 @@ snet_stream_t *SNetNameShiftInst( snet_stream_t *instream,
     farg->guard_exprs = guard_exprs;
     farg->filter_instructions = NULL; /* instructions */
 
-    SNetThreadingSpawn( ENTITY_nameshift, location, SNetLocvecGet(info),
-          "<nameshift>", &NameshiftTask, farg);
+    SNetThreadingSpawn( ENTITY_nameshift, location, SNetNameCreate(locvec, SNetIdGet(info),
+          "<nameshift>"), &NameshiftTask, farg);
   } else {
     SNetVariantDestroy( untouched);
     outstream = instream;

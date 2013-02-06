@@ -119,15 +119,12 @@ int SNetThreadingCleanup(void)
 }
 
 
-void SNetThreadingSpawn(snet_entity_t ent, int loc, snet_locvec_t *locvec,
-                        const char *name, snet_taskfun_t func, void *arg)
+void SNetThreadingSpawn(snet_entity_t ent, int loc, const char *name,
+                        snet_taskfun_t func, void *arg)
 {
-  int res, namelen, size;
+  int res;
   pthread_t p;
   pthread_attr_t attr;
-
-  /* if locvec is NULL then entity_other */
-  assert(locvec != NULL || ent == ENTITY_other);
 
   /* create snet_thread_t */
   snet_thread_t *thr = SNetMemAlloc(sizeof(snet_thread_t));
@@ -136,13 +133,7 @@ void SNetThreadingSpawn(snet_entity_t ent, int loc, snet_locvec_t *locvec,
   pthread_cond_init( &thr->pollcond, NULL );
   thr->wakeup_sd = NULL;
   thr->inarg = arg;
-
-  namelen = name ? strlen(name) : 0;
-  size = (locvec ? SNetLocvecPrintSize(locvec) : 0) + namelen + 1;
-  thr->name = SNetMemAlloc(size);
-  strncpy(thr->name, name, namelen);
-  if (locvec != NULL) SNetLocvecPrint(thr->name + namelen, locvec);
-  thr->name[size-1] = '\0';
+  thr->name = (char*) name;
 
   /* increment entity counter */
   pthread_mutex_lock( &entity_lock );
