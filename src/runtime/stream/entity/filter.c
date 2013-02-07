@@ -2,6 +2,7 @@
 #include <stdarg.h>
 #include <assert.h>
 
+#include "ast.h"
 #include "expression.h"
 #include "filter.h"
 #include "list.h"
@@ -9,7 +10,6 @@
 #include "bool.h"
 #include "record.h"
 #include "moninfo.h"
-#include "locvec.h"
 #include "snetentities.h"
 #include "debug.h"
 #include "interface_functions.h"
@@ -88,21 +88,6 @@ typedef struct {
 
 static void FilterArgsDestroy( filter_arg_t *farg)
 {
-  SNetVariantDestroy( farg->input_variant);
-
-  if (farg->filter_instructions != NULL) {
-    int i;
-    snet_expr_t *expr;
-    (void) expr;
-
-    LIST_ENUMERATE(farg->guard_exprs, i, expr) {
-      SNetFilterInstrListListDestroy( farg->filter_instructions[i]);
-    }
-
-    SNetMemFree( farg->filter_instructions);
-  }
-
-  SNetExprListDestroy( farg->guard_exprs);
   SNetMemFree( farg);
 }
 
@@ -338,6 +323,7 @@ static void NameshiftTask(void *arg)
  */
 static snet_stream_t* CreateFilter( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
     snet_expr_list_t *guard_exprs,
@@ -356,27 +342,16 @@ static snet_stream_t* CreateFilter( snet_stream_t *instream,
       !FilterIsBypass(input_variant, guard_exprs, instr_list)) {
     outstream = SNetStreamCreate(0);
 
-    farg = (filter_arg_t *) SNetMemAlloc( sizeof( filter_arg_t));
+    farg = SNetMemAlloc( sizeof( filter_arg_t));
     farg->instream  = SNetStreamOpen(instream, 'r');
     farg->outstream = SNetStreamOpen(outstream, 'w');
     farg->input_variant = input_variant;
     farg->guard_exprs = guard_exprs;
     farg->filter_instructions = instr_list;
 
-    SNetThreadingSpawn( ENTITY_filter, location, SNetLocvecGet(info),
-          name, &FilterTask, farg);
+    SNetThreadingSpawn( ENTITY_filter, location, SNetNameCreate(locvec, SNetIdGet(info),
+          name), &FilterTask, farg);
   } else {
-    int i;
-    snet_expr_t *expr;
-    (void) expr;
-
-    SNetVariantDestroy(input_variant);
-    LIST_ENUMERATE(guard_exprs, i, expr) {
-      SNetFilterInstrListListDestroy( instr_list[i]);
-    }
-
-    SNetMemFree( instr_list);
-    SNetExprListDestroy(guard_exprs);
     outstream = instream;
   }
 
@@ -406,63 +381,94 @@ static snet_stream_t* CreateFilter( snet_stream_t *instream,
 /**
  * Filter creation function
  */
-snet_stream_t* SNetFilter( snet_stream_t *instream,
+snet_stream_t* SNetFilterInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
-    snet_expr_list_t *guard_exprs, ...)
+    snet_expr_list_t *guard_exprs,
+    snet_filter_instr_list_list_t **instr_list)
 {
-  int num_outtypes;
-  snet_filter_instr_list_list_t **instr_list;
-
   assert(input_variant != NULL);
   assert(guard_exprs != NULL);
 
-  num_outtypes = SNetExprListLength( guard_exprs);
+  return CreateFilter(instream, info, locvec, location, input_variant,
+      guard_exprs, instr_list, "<filter>");
+}
+
+snet_ast_t* SNetFilter(int location,
+                       snet_variant_t *input_variant,
+                       snet_expr_list_t *guard_exprs, ...)
+{
+  snet_filter_instr_list_list_t **instr_list;
+  int num_outtypes = SNetExprListLength( guard_exprs);
 
   /* read in the filter instructions from varargs */
   BUILD_INSTR_FROM_VARARG(instr_list, num_outtypes, guard_exprs);
 
-  return CreateFilter(instream, info, location, input_variant,
-      guard_exprs, instr_list, "<filter>");
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_filter;
+  result->locvec.type = LOC_FILTER;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
+  result->filter.input_variant = input_variant;
+  result->filter.guard_exprs = guard_exprs;
+  result->filter.instr_list = instr_list;
+  return result;
 }
-
 
 
 /**
  * Translate creation function
  */
-snet_stream_t* SNetTranslate( snet_stream_t *instream,
+snet_stream_t* SNetTranslateInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     snet_variant_t *input_variant,
-    snet_expr_list_t *guard_exprs, ...)
+    snet_expr_list_t *guard_exprs,
+    snet_filter_instr_list_list_t **instr_list)
 {
-  int num_outtypes;
-  snet_filter_instr_list_list_t **instr_list;
-
   assert(input_variant != NULL);
   assert(guard_exprs != NULL);
 
-  num_outtypes = SNetExprListLength( guard_exprs);
+  return CreateFilter(instream, info, locvec, location, input_variant,
+      guard_exprs, instr_list, "<translate>");
+}
+
+snet_ast_t* SNetTranslate(int location,
+                          snet_variant_t *input_variant,
+                          snet_expr_list_t *guard_exprs, ...)
+{
+  snet_filter_instr_list_list_t **instr_list;
+  int num_outtypes = SNetExprListLength( guard_exprs);
 
   /* read in the filter instructions from varargs */
   BUILD_INSTR_FROM_VARARG(instr_list, num_outtypes, guard_exprs);
 
-  return CreateFilter(instream, info, location, input_variant,
-      guard_exprs, instr_list, "<translate>");
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_translate;
+  result->locvec.type = LOC_FILTER;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
+  result->filter.input_variant = input_variant;
+  result->filter.guard_exprs = guard_exprs;
+  result->filter.instr_list = instr_list;
+  return result;
 }
-
-
 
 /**
  * Nameshift creation function
  */
-snet_stream_t *SNetNameShift( snet_stream_t *instream,
+snet_stream_t *SNetNameShiftInst( snet_stream_t *instream,
     snet_info_t *info,
+    snet_locvec_t *locvec,
     int location,
     int offset,
-    snet_variant_t *untouched)
+    snet_variant_t *untouched,
+    snet_expr_list_t *guard_exprs)
 {
   snet_stream_t *outstream;
   filter_arg_t *farg;
@@ -475,15 +481,31 @@ snet_stream_t *SNetNameShift( snet_stream_t *instream,
     farg->instream  = SNetStreamOpen(instream, 'r');
     farg->outstream = SNetStreamOpen(outstream, 'w');
     farg->input_variant = untouched;
-    farg->guard_exprs = SNetExprListCreate( 1, SNetEconsti( offset));
+    farg->guard_exprs = guard_exprs;
     farg->filter_instructions = NULL; /* instructions */
 
-    SNetThreadingSpawn( ENTITY_nameshift, location, SNetLocvecGet(info),
-          "<nameshift>", &NameshiftTask, farg);
+    SNetThreadingSpawn( ENTITY_nameshift, location, SNetNameCreate(locvec, SNetIdGet(info),
+          "<nameshift>"), &NameshiftTask, farg);
   } else {
     SNetVariantDestroy( untouched);
     outstream = instream;
   }
 
   return outstream;
+}
+
+snet_ast_t *SNetNameShift(int location,
+                          int offset,
+                          snet_variant_t *untouched)
+{
+  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
+  result->location = location;
+  result->type = snet_nameshift;
+  result->locvec.type = LOC_FILTER;
+  result->locvec.num = -1;
+  result->locvec.parent = NULL;
+  result->nameshift.offset = offset;
+  result->nameshift.untouched = untouched;
+  result->nameshift.guard_exprs = SNetExprListCreate( 1, SNetEconsti( offset));
+  return result;
 }

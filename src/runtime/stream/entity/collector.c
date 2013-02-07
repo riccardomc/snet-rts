@@ -3,7 +3,7 @@
 
 #include "collector.h"
 #include "snetentities.h"
-#include "locvec.h"
+#include "ast.h"
 #include "memfun.h"
 #include "bool.h"
 #include "debug.h"
@@ -360,7 +360,7 @@ static void CollectorTask(void *arg)
  * Collector creation function
  * @pre num >= 1
  */
-snet_stream_t *CollectorCreateStatic( int num, snet_stream_t **instreams, int location, snet_info_t *info)
+snet_stream_t *CollectorCreateStatic( int num, snet_stream_t **instreams, snet_locvec_t *locvec, int location, snet_info_t *info)
 {
   snet_stream_t *outstream;
   coll_arg_t *carg;
@@ -389,8 +389,8 @@ snet_stream_t *CollectorCreateStatic( int num, snet_stream_t **instreams, int lo
 
 
   /* spawn collector task */
-  SNetThreadingSpawn( ENTITY_collect, location, SNetLocvecGet(info),
-        "<collect>", &CollectorTask, carg);
+  SNetThreadingSpawn( ENTITY_collect, location, SNetNameCreate(locvec, SNetIdGet(info),
+        "<collect>"), &CollectorTask, carg);
   return outstream;
 }
 
@@ -399,7 +399,7 @@ snet_stream_t *CollectorCreateStatic( int num, snet_stream_t **instreams, int lo
 /**
  * Collector creation function
  */
-snet_stream_t *CollectorCreateDynamic( snet_stream_t *instream, int location, snet_info_t *info)
+snet_stream_t *CollectorCreateDynamic( snet_stream_t *instream, snet_locvec_t *locvec, int location, snet_info_t *info)
 {
   snet_stream_t *outstream;
   coll_arg_t *carg;
@@ -422,7 +422,7 @@ snet_stream_t *CollectorCreateDynamic( snet_stream_t *instream, int location, sn
   SNetStreamsetPut(&carg->readyset, carg->curstream);
 
   /* spawn collector task */
-  SNetThreadingSpawn( ENTITY_collect, location, SNetLocvecGet(info),
-        "<collect>", &CollectorTask, carg);
+  SNetThreadingSpawn( ENTITY_collect, location, SNetNameCreate(locvec, SNetIdGet(info),
+        "<collect>"), &CollectorTask, carg);
   return outstream;
 }

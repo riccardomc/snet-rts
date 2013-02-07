@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <pthread.h>
 
+#include "ast.h" //FIXME
 #include "distribcommon.h"
 #include "memfun.h"
 #include "omanager.h"
@@ -125,8 +126,8 @@ void SNetOutputManagerInit(void)
 void SNetOutputManagerStart(void)
 {
   wakeupStream = SNetStreamCreate(1);
-  SNetThreadingSpawn( ENTITY_other, -1, NULL,
-      "output_manager", &SNetOutputManager, NULL);
+  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL,
+      "output_manager"), &SNetOutputManager, NULL);
 }
 
 void SNetOutputManagerStop(void)

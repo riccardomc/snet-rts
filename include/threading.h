@@ -1,8 +1,8 @@
 #ifndef _THREADING_H_
 #define _THREADING_H_
 
+#include "ast.h"
 #include "distribution.h" //XXX dependency?
-#include "locvec.h"
 #include "moninfo.h"
 
 /******************************************************************************
@@ -118,8 +118,8 @@ void SNetThreadingEventSignal(snet_moninfo_t *moninfo);
  *
  * @return 0 on success
  */
-void SNetThreadingSpawn(snet_entity_t ent, int loc, snet_locvec_t *locvec,
-                        const char *name, snet_taskfun_t f, void *arg);
+void SNetThreadingSpawn(snet_entity_t ent, int loc, const char *name,
+                        snet_taskfun_t f, void *arg);
 
 void SNetThreadingRespawn(snet_taskfun_t);
 

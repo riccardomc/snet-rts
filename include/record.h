@@ -39,12 +39,10 @@ typedef struct {
 #define TERM_REC( name, component) RECORD( name, terminate_rec)->component
 #define COLL_REC( name, component) RECORD( name, coll_rec)->component
 
-#include "distribution.h"
 #include "map.h"
 #include "variant.h"
 #include "stream.h"
 #include "bool.h"
-#include "locvec.h"
 
 
 #define LIST_NAME_H RecId /* SNetRecIdListFUNC */

@@ -11,6 +11,7 @@ struct snet_info {
   snet_info_tag_t tag;
   uintptr_t data;
   void *(*copyFun)(void *);
+  void (*freeFun)(void *);
   struct snet_info *next;
 };
 
@@ -25,25 +26,28 @@ snet_info_t *SNetInfoInit()
   new->tag = -1;
   new->data = 0;
   new->copyFun = NULL;
+  new->freeFun = NULL;
   new->next = NULL;
   return new;
 }
 
 void SNetInfoSetTag(snet_info_t *info, snet_info_tag_t tag, uintptr_t data,
-                    void *(*copyFun)(void *))
+                    void *(*copyFun)(void *), void (*freeFun)(void *))
 {
   while (info->tag != tag && info->tag != -1) {
     info = info->next;
   }
 
   if (info->tag == tag) {
-    if (copyFun) SNetMemFree((void*) info->data);
+    if (freeFun) info->freeFun((void*) info->data);
     info->data = data;
     info->copyFun = copyFun;
+    info->freeFun = freeFun;
   } else if (info->tag == -1) {
     info->tag = tag;
     info->data = data;
     info->copyFun = copyFun;
+    info->freeFun = freeFun;
     info->next = SNetInfoInit();
   }
 }
@@ -88,6 +92,7 @@ snet_info_t *SNetInfoCopy(snet_info_t *info)
   do {
     to->tag = from->tag;
     to->copyFun = from->copyFun;
+    to->freeFun = from->freeFun;
 
     if (to->copyFun) to->data = (uintptr_t) from->copyFun((void*) from->data);
     else to->data = from->data;
@@ -106,7 +111,7 @@ void SNetInfoDestroy(snet_info_t *info)
   snet_info_t *tmp;
   while (info) {
     tmp = info->next;
-    if (info->copyFun) SNetMemFree((void*) info->data);
+    if (info->freeFun) info->freeFun((void*) info->data);
     SNetMemFree(info);
     info = tmp;
   }
