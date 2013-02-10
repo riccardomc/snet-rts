@@ -77,7 +77,21 @@ void SNetRouteDynamicExit(snet_info_t *info, int dynamicIndex, int dynamicLoc,
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, int node) {}
 
+void SNetDistribPack(void *arg, void *src, size_t size)
+{
+  (void) arg; /* NOT USED */
+  (void) src; /* NOT USED */
+  (void) size; /* NOT USED */
+}
+
 void SNetDistribPackOld(void *src, ...) { (void) src; /* NOT USED */ }
+
+void SNetDistribUnpack(void *arg, void *dst, size_t size)
+{
+  (void) arg; /* NOT USED */
+  (void) dst; /* NOT USED */
+  (void) size; /* NOT USED */
+}
 
 void SNetDistribUnpackOld(void *dst, ...) { (void) dst; /* NOT USED */ }
 

@@ -426,10 +426,12 @@ bool SNetDistribIsRootNode(void)
 
 void SNetDistribPack(void *buf, void *src, size_t size)
 {
-  //TODO
+  //FIXME
+  ZMQPack((zframe_t **)buf, size, src);
 }
 
 void SNetDistribUnpack(void *buf, void *dst, size_t size)
 {
-  //TODO
+  //FIXME
+  ZMQUnpack((zframe_t **)buf, size, dst);
 }
