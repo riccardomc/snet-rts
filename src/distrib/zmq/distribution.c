@@ -285,7 +285,7 @@ void SNetDistribLocalStop(void)
 void SNetDistribFetchRef(snet_ref_t *ref) 
 {
   zframe_t *payload = NULL; 
-  SNetRefSerialise(ref, &payload, &PackInt, &PackByte);
+  SNetRefSerialise(ref, &payload);
 
   SNetDistribZMQSend(payload, snet_ref_fetch, SNetRefNode(ref));
 }
@@ -293,7 +293,7 @@ void SNetDistribFetchRef(snet_ref_t *ref)
 void SNetDistribUpdateRef(snet_ref_t *ref, int count) 
 {
   zframe_t *payload = NULL;
-  SNetRefSerialise(ref, &payload, &PackInt, &PackByte);
+  SNetRefSerialise(ref, &payload);
   PackInt(&payload, 1, &count);
   SNetDistribZMQSend(payload, snet_ref_update, SNetRefNode(ref));
 }
@@ -325,7 +325,7 @@ snet_msg_t SNetDistribRecvMsg(void)
 
   switch(result.type) {
     case snet_rec:
-      result.rec = SNetRecDeserialise(&payload_f, &UnpackInt, &UnpackRef);
+      result.rec = SNetRecDeserialise(&payload_f);
       
     case snet_block:
     case snet_unblock:
@@ -333,16 +333,16 @@ snet_msg_t SNetDistribRecvMsg(void)
       UnpackDest(&payload_f, &result.dest);
       break;
     case snet_ref_set:
-      result.ref = SNetRefDeserialise(&payload_f, &UnpackInt, &UnpackByte);
+      result.ref = SNetRefDeserialise(&payload_f);
       result.data = (uintptr_t) SNetInterfaceGet(SNetRefInterface(result.ref))->unpackfun(zframe_data(payload_f));
       break;
     case snet_ref_fetch:
-      result.ref = SNetRefDeserialise(&payload_f, &UnpackInt, &UnpackByte);
+      result.ref = SNetRefDeserialise(&payload_f);
       UnpackInt(&source_f, 1, &data_v);
       result.data = data_v;
       break;
     case snet_ref_update:
-      result.ref = SNetRefDeserialise(&payload_f, &UnpackInt, &UnpackByte);
+      result.ref = SNetRefDeserialise(&payload_f);
       UnpackInt(&payload_f, 1, &result.val);
       break;
     default:
@@ -360,7 +360,7 @@ snet_msg_t SNetDistribRecvMsg(void)
 void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 {
   zframe_t *payload = NULL;
-  SNetRecSerialise(rec, &payload, &PackInt, &PackRef);
+  SNetRecSerialise(rec, &payload);
   PackDest(&payload, &dest);
   SNetDistribZMQSend(payload, snet_rec, dest.node);
 }
@@ -390,7 +390,7 @@ void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
 {
   zframe_t *payload = NULL;
   char data_buf[4096];
-  SNetRefSerialise(ref, &payload, &PackInt, &PackByte);
+  SNetRefSerialise(ref, &payload);
   SNetInterfaceGet(SNetRefInterface(ref))->packfun(data, &data_buf);
   PackByte(&payload, 4096, data_buf); //FIXME: I don't know actual data size!
   SNetDistribZMQSend(payload, snet_ref_set,  (uintptr_t) dest);
@@ -424,12 +424,12 @@ bool SNetDistribIsRootNode(void)
   return node_location == 0;
 }
 
-void SNetDistribPack(void *src, ...)
+void SNetDistribPack(void *buf, void *src, size_t size)
 {
   //TODO
 }
 
-void SNetDistribUnpack(void *dst, ...)
+void SNetDistribUnpack(void *buf, void *dst, size_t size)
 {
   //TODO
 }

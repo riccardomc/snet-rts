@@ -82,7 +82,7 @@ inline static void UnpackByte(void *buf, int count, char *dst)
 inline static void PackRef(void *buf, int count, snet_ref_t **src)
 {
   for (int i = 0; i < count; i++) {
-    SNetRefSerialise(src[i], buf, &PackInt, &PackByte);
+    SNetRefSerialise(src[i], buf);
     SNetRefOutgoing(src[i]);
   }
 }
@@ -90,7 +90,7 @@ inline static void PackRef(void *buf, int count, snet_ref_t **src)
 inline static void UnpackRef(void *buf, int count, snet_ref_t **dst)
 {
   for (int i = 0; i < count; i++) {
-    dst[i] = SNetRefDeserialise(buf, &UnpackInt, &UnpackByte);
+    dst[i] = SNetRefDeserialise(buf);
     SNetRefIncoming(dst[i]);
   }
 }
