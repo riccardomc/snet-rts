@@ -58,9 +58,6 @@ static void (*MemFree)(void*) = &SNetMemFree;
 
 /************************* Distribution functions *****************************/
 #ifdef ENABLE_DIST_MPI
-#include <mpi.h>
-#include "pack.h"
-
 static void MPIPackFun(c4snet_data_t *data, void *buf);
 static c4snet_data_t *MPIUnpackFun(void *buf);
 #endif
@@ -429,40 +426,16 @@ c4snet_data_t *C4SNetDeepCopy(c4snet_data_t *data)
 
 /************************ Distribution Layer Functions ***********************/
 #ifdef ENABLE_DIST_MPI
-static MPI_Datatype TypeToMPIType(c4snet_type_t type)
-{
-  switch (type) {
-    case CTYPE_uchar: return MPI_UNSIGNED_CHAR;
-    case CTYPE_char: return MPI_CHAR;
-    case CTYPE_ushort: return MPI_UNSIGNED_SHORT;
-    case CTYPE_short: return MPI_SHORT;
-    case CTYPE_uint: return MPI_UNSIGNED;
-    case CTYPE_int: return MPI_INT;
-    case CTYPE_ulong: return MPI_UNSIGNED_LONG;
-    case CTYPE_long: return MPI_LONG;
-    case CTYPE_float: return MPI_FLOAT;
-    case CTYPE_double: return MPI_DOUBLE;
-    case CTYPE_ldouble: return MPI_LONG_DOUBLE;
-    default: SNetUtilDebugFatal("Unknown MPI datatype!\n");
-  }
-
-  return MPI_CHAR;
-}
-
 static void MPIPackFun(c4snet_data_t *data, void *buf)
 {
-  int vtype = data->vtype,
-      type = data->type;
-
-  SNetDistribPack(&vtype, buf, MPI_INT, 1);
-  SNetDistribPack(&data->size, buf, MPI_INT, 1);
-  SNetDistribPack(&type, buf, MPI_INT, 1);
+  SNetDistribPack(buf, &data->vtype, sizeof(c4snet_vtype_t));
+  SNetDistribPack(buf, &data->size, sizeof(size_t));
+  SNetDistribPack(buf, &data->type, sizeof(c4snet_type_t));
 
   if (data->vtype == VTYPE_array) {
-    SNetDistribPack(data->data.ptr, buf, TypeToMPIType(data->type),
-                    data->size);
+    SNetDistribPack(buf, data->data.ptr, AllocatedSpace(data));
   } else {
-    SNetDistribPack(&data->data, buf, TypeToMPIType(data->type), 1);
+    SNetDistribPack(buf, &data->data, sizeOfType(data->type));
   }
 }
 
@@ -470,18 +443,20 @@ static c4snet_data_t *MPIUnpackFun(void *buf)
 {
   void *tmp;
   c4snet_data_t *result;
-  int vtype, type, count;
+  c4snet_vtype_t vtype;
+  c4snet_type_t type;
+  size_t count;
 
-  SNetDistribUnpack(&vtype, buf, MPI_INT, 1);
-  SNetDistribUnpack(&count, buf, MPI_INT, 1);
-  SNetDistribUnpack(&type, buf, MPI_INT, 1);
+  SNetDistribUnpack(buf, &vtype, sizeof(c4snet_vtype_t));
+  SNetDistribUnpack(buf, &count, sizeof(size_t));
+  SNetDistribUnpack(buf, &type, sizeof(c4snet_type_t));
 
   if (vtype == VTYPE_array) {
     result = C4SNetAlloc(type, count, &tmp);
-    SNetDistribUnpack(tmp, buf, TypeToMPIType(type), count);
+    SNetDistribUnpack(buf, tmp, AllocatedSpace(result));
   } else {
     result = C4SNetAlloc(type, 1, &tmp);
-    SNetDistribUnpack(tmp, buf, TypeToMPIType(type), 1);
+    SNetDistribUnpack(buf, tmp, sizeOfType(result->type));
   }
 
   return result;
@@ -505,21 +480,21 @@ static void SCCFreeWrapper(void *p)
 
 static void SCCPackFun(c4snet_data_t *data, void *buf)
 {
-  SNetDistribPack(data, buf, sizeof(c4snet_data_t), false);
+  SNetDistribPackOld(data, buf, sizeof(c4snet_data_t), false);
 
   if (data->vtype == VTYPE_array) {
-    SNetDistribPack(data->data.ptr, buf, AllocatedSpace(data), true);
+    SNetDistribPackOld(data->data.ptr, buf, AllocatedSpace(data), true);
   }
 }
 
 static void *SCCUnpackFun(void *buf)
 {
   c4snet_data_t *result = SNetMemAlloc(sizeof(c4snet_data_t));
-  SNetDistribUnpack(result, buf, false, sizeof(c4snet_data_t));
+  SNetDistribUnpackOld(result, buf, false, sizeof(c4snet_data_t));
 
   result->ref_count = 1;
   if (result->vtype == VTYPE_array) {
-    SNetDistribUnpack(&result->data.ptr, buf, true);
+    SNetDistribUnpackOld(&result->data.ptr, buf, true);
   }
 
   return result;

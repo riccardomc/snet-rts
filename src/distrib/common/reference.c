@@ -123,23 +123,13 @@ snet_ref_t *SNetRefCopy(snet_ref_t *ref)
   return result;
 }
 
-void SNetRefSerialise(snet_ref_t *ref, void *buf,
-                      void (*serialiseInt)(void*, int, int*),
-                      void (*serialiseByte)(void*, int, char*))
-{
-    serialiseInt(buf, 1, &ref->node);
-    serialiseInt(buf, 1, &ref->interface);
-    serialiseByte(buf, sizeof(uintptr_t), (char*) &ref->data);
-}
+void SNetRefSerialise(snet_ref_t *ref, void *buf)
+{ SNetDistribPack(buf, ref, sizeof(snet_ref_t)); }
 
-snet_ref_t *SNetRefDeserialise(void *buf,
-                               void (*deserialiseInt)(void*, int, int*),
-                               void (*deserialiseByte)(void*, int, char*))
+snet_ref_t *SNetRefDeserialise(void *buf)
 {
     snet_ref_t *result = SNetMemAlloc(sizeof(snet_ref_t));
-    deserialiseInt(buf, 1, &result->node);
-    deserialiseInt(buf, 1, &result->interface);
-    deserialiseByte(buf, sizeof(uintptr_t), (char*) &result->data);
+    SNetDistribUnpack(buf, result, sizeof(snet_ref_t));
     return result;
 }
 

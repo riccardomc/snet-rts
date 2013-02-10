@@ -126,7 +126,7 @@ bool SNetDistribIsNodeLocation(int loc) { return node_location == loc; }
 
 bool SNetDistribIsRootNode(void) { return node_location == 0; }
 
-void SNetDistribPack(void *src, ...)
+void SNetDistribPackOld(void *src, ...)
 {
   bool isData;
   va_list args;
@@ -167,7 +167,7 @@ void SNetDistribPack(void *src, ...)
   }
 }
 
-void SNetDistribUnpack(void *dst, ...)
+void SNetDistribUnpackOld(void *dst, ...)
 {
   bool isData;
   size_t size;

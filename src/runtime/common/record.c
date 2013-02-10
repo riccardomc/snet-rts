@@ -544,46 +544,41 @@ void SNetRecAddAsParent(snet_record_t *rec, snet_record_t *parent)
   }
 }
 
-
 /*****************************************************************************/
 
 
-void SNetRecSerialise(
-        snet_record_t *rec,
-        void *buf,
-        void (*packInts)(void*, int, int*),
-        void (*packRefs)(void*, int, snet_ref_t**))
+void SNetRefIncoming(snet_ref_t *ref);
+void SNetRefOutgoing(snet_ref_t *ref);
+
+void SNetRecSerialise(snet_record_t *rec, void *buf)
 {
   snet_ref_t *val;
-  int key, enumConversion;
+  int key;
   (void) key;
 
-  enumConversion = REC_DESCR(rec);
-  packInts(buf, 1, &enumConversion);
+  SNetDistribPack(buf, &REC_DESCR(rec), sizeof(REC_DESCR(rec)));
   switch (REC_DESCR(rec)) {
     case REC_data:
-      SNetIntMapSerialise(DATA_REC(rec, btags), buf, packInts, packInts);
-      SNetIntMapSerialise(DATA_REC(rec, tags), buf, packInts, packInts);
-      SNetRefMapSerialise(DATA_REC(rec, fields), buf, packInts, packRefs);
+      SNetIntMapSerialise(DATA_REC(rec, btags), buf);
+      SNetIntMapSerialise(DATA_REC(rec, tags), buf);
+      SNetRefMapSerialise(DATA_REC(rec, fields), buf);
 
-      enumConversion = DATA_REC( rec, mode);
-      packInts(buf, 1, &enumConversion);
-
-      enumConversion = DATA_REC( rec, interface_id);
-      packInts(buf, 1, &enumConversion);
+      SNetDistribPack(buf, &DATA_REC(rec, mode), sizeof(DATA_REC(rec, mode)));
+      SNetDistribPack(buf, &DATA_REC(rec, interface_id), sizeof(DATA_REC(rec, interface_id)));
 
       MAP_DEQUEUE_EACH( DATA_REC( rec, fields), key, val) {
+        SNetRefOutgoing(val);
         SNetMemFree(val);
       }
 
       /* FIXME how to best serialise the id and the parent ids */
       break;
     case REC_sort_end:
-      packInts(buf, 1, &SORT_E_REC(rec, level));
-      packInts(buf, 1, &SORT_E_REC(rec, num));
+      SNetDistribPack(buf, &SORT_E_REC(rec, level), sizeof(SORT_E_REC(rec, level)));
+      SNetDistribPack(buf, &SORT_E_REC(rec, num), sizeof(SORT_E_REC(rec, num)));
       break;
     case REC_terminate:
-      packInts(buf, 1, &TERM_REC(rec, local));
+      SNetDistribPack(buf, &TERM_REC(rec, local), sizeof(TERM_REC(rec, local)));
       break;
     case REC_trigger_initialiser:
       break;
@@ -599,41 +594,42 @@ void SNetRecSerialise(
   SNetRecDestroy(rec);
 }
 
-snet_record_t *SNetRecDeserialise(
-        void *buf,
-        void (*unpackInts)(void*, int, int*),
-        void (*unpackRefs)(void*, int, snet_ref_t**))
+snet_record_t *SNetRecDeserialise(void *buf)
 {
-  int enumConversion;
+  snet_ref_t *val;
+  int key;
+  (void) key;
+  snet_record_descr_t descr;
   snet_record_t *result = NULL;
 
-  unpackInts(buf, 1, &enumConversion);
-  switch (enumConversion) {
+  SNetDistribUnpack(buf, &descr, sizeof(descr));
+  switch (descr) {
     case REC_data:
-      result = SNetRecCreate(enumConversion);
-      SNetIntMapDeserialise(DATA_REC(result, btags), buf, unpackInts, unpackInts);
-      SNetIntMapDeserialise(DATA_REC(result, tags), buf, unpackInts, unpackInts);
-      SNetRefMapDeserialise(DATA_REC(result, fields), buf, unpackInts, unpackRefs);
+      result = SNetRecCreate(descr);
+      SNetIntMapDeserialise(DATA_REC(result, btags), buf);
+      SNetIntMapDeserialise(DATA_REC(result, tags), buf);
+      SNetRefMapDeserialise(DATA_REC(result, fields), buf);
 
-      unpackInts(buf, 1, &enumConversion);
-      DATA_REC( result, mode) = enumConversion;
+      SNetDistribUnpack(buf, &DATA_REC(result, mode), sizeof(DATA_REC(result, mode)));
+      SNetDistribUnpack(buf, &DATA_REC(result, interface_id), sizeof(DATA_REC(result, interface_id)));
 
-      unpackInts(buf, 1, &enumConversion);
-      DATA_REC( result, mode) = enumConversion;
+      MAP_FOR_EACH(DATA_REC(result, fields), key, val) {
+        SNetRefIncoming(val);
+      }
 
       /* FIXME how to best deserialise the id and the parent ids */
       break;
     case REC_sort_end:
-      result = SNetRecCreate(enumConversion, 0, 0);
-      unpackInts(buf, 1, &SORT_E_REC(result, level));
-      unpackInts(buf, 1, &SORT_E_REC(result, num));
+      result = SNetRecCreate(descr, 0, 0);
+      SNetDistribUnpack(buf, &SORT_E_REC(result, level), sizeof(SORT_E_REC(result, level)));
+      SNetDistribUnpack(buf, &SORT_E_REC(result, num), sizeof(SORT_E_REC(result, num)));
       break;
     case REC_terminate:
-      result = SNetRecCreate(enumConversion);
-      unpackInts(buf, 1, &TERM_REC(result, local));
+      result = SNetRecCreate(descr);
+      SNetDistribUnpack(buf, &TERM_REC(result, local), sizeof(TERM_REC(result, local)));
       break;
     case REC_trigger_initialiser:
-      result = SNetRecCreate(enumConversion);
+      result = SNetRecCreate(descr);
       break;
     case REC_sync:
     case REC_collect:

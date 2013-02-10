@@ -5,7 +5,8 @@
 
 #include "distribution.h"
 #include "distribcommon.h"
-#include "pack.h"
+
+#include "mpi_buf.h"
 
 int node_location;
 
@@ -32,8 +33,6 @@ void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
   }
 }
 
-void SNetDistribLocalStop(void) { MPI_Finalize(); }
-
 void SNetDistribGlobalStop(void)
 {
   int i;
@@ -44,40 +43,58 @@ void SNetDistribGlobalStop(void)
   }
 }
 
+void SNetDistribLocalStop(void) { MPI_Finalize(); }
+
 int SNetDistribGetNodeId(void) { return node_location; }
 
 bool SNetDistribIsNodeLocation(int loc) { return node_location == loc; }
 
 bool SNetDistribIsRootNode(void) { return node_location == 0; }
 
-void SNetDistribPack(void *src, ...)
+void SNetDistribPackOld(void *src, ...)
 {
   va_list args;
   mpi_buf_t *buf;
-  MPI_Datatype type;
-  int count;
+  size_t count;
 
   va_start(args, src);
   buf = va_arg(args, mpi_buf_t *);
-  type = va_arg(args, MPI_Datatype);
-  count = va_arg(args, int);
+  count = va_arg(args, size_t);
   va_end(args);
 
-  MPIPack(buf, src, type, count);
+  SNetDistribPack(buf, src, count);
 }
 
-void SNetDistribUnpack(void *dst, ...)
+void SNetDistribUnpackOld(void *dst, ...)
 {
   va_list args;
   mpi_buf_t *buf;
-  MPI_Datatype type;
   int count;
 
   va_start(args, dst);
   buf = va_arg(args, mpi_buf_t *);
-  type = va_arg(args, MPI_Datatype);
-  count = va_arg(args, int);
+  count = va_arg(args, size_t);
   va_end(args);
 
-  MPIUnpack(buf, dst, type, count);
+  SNetDistribUnpack(buf, dst, count);
+}
+
+void SNetDistribPack(void *arg, void *src, size_t size)
+{
+  mpi_buf_t *buf = arg;
+  if (size > buf->size - buf->offset) {
+    char *newBuf = SNetMemAlloc(buf->offset + size);
+    memcpy(newBuf, buf->data, buf->offset);
+    SNetMemFree(buf->data);
+    buf->data = newBuf;
+    buf->size = buf->offset + size;
+  }
+
+  MPI_Pack(src, (int) size, MPI_BYTE, buf->data, buf->size, &buf->offset, MPI_COMM_WORLD);
+}
+
+void SNetDistribUnpack(void *arg, void *dst, size_t size)
+{
+  mpi_buf_t *buf = arg;
+  MPI_Unpack(buf->data, buf->size, &buf->offset, dst, size, MPI_BYTE, MPI_COMM_WORLD);
 }

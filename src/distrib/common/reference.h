@@ -8,10 +8,8 @@ void SNetReferenceDestroy(void);
 
 int SNetRefInterface(snet_ref_t *ref);
 int SNetRefNode(snet_ref_t *ref);
-void SNetRefSerialise(snet_ref_t *ref, void *buf, void (*)(void*, int, int*),
-                                                  void (*)(void*, int, char*));
-snet_ref_t *SNetRefDeserialise(void *buf, void (*)(void*, int, int*),
-                                                  void (*)(void*, int, char*));
+void SNetRefSerialise(snet_ref_t *ref, void *buf);
+snet_ref_t *SNetRefDeserialise(void *buf);
 
 void SNetRefIncoming(snet_ref_t *ref);
 void SNetRefOutgoing(snet_ref_t *ref);

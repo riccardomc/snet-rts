@@ -238,51 +238,42 @@ void MAP_FUNCTION(MAP_NAME, Rename)(snet_map_t *map, MAP_KEY oldKey, MAP_KEY new
 
 
 
-void MAP_FUNCTION(MAP_NAME, Serialise)(
-        snet_map_t *map,
-        void *buf,
-        void (*packInts)(void*, int, int*),
-        #ifndef MAP_CANARY
-        void (*packKeys)(void*, int, MAP_KEY*),
-        #endif
-        void (*packValues)(void*, int, MAP_VAL*))
+void MAP_FUNCTION(MAP_NAME, Serialise)(snet_map_t *map, void *buf)
 {
-  packInts(buf, 1, &map->used);
-  #ifndef MAP_CANARY
-    packKeys(buf, map->used, map->keys);
+  SNetDistribPack(buf, &map->used, sizeof(map->used));
+  SNetDistribPack(buf, map->keys, map->used * sizeof(MAP_KEY));
+  #ifdef MAP_VAL_SERIALISE_FUN
+    for (int i = 0; i < map->used; i++) {
+      MAP_VAL_SERIALISE_FUN(map->values[i], buf);
+    }
   #else
-    packInts(buf, map->used, map->keys);
+    SNetDistribPack(buf, map->values, map->used * sizeof(MAP_VAL));
   #endif
-  packValues(buf, map->used, map->values);
 }
 
-void MAP_FUNCTION(MAP_NAME, Deserialise)(
-        snet_map_t *map,
-        void *buf,
-        void (*unpackInts)(void*, int, int*),
-        #ifndef MAP_CANARY
-        void (*unpackKeys)(void*, int, MAP_KEY*),
-        #endif
-        void (*unpackValues)(void*, int, MAP_VAL*))
+void MAP_FUNCTION(MAP_NAME, Deserialise)(snet_map_t *map, void *buf)
 {
-  unpackInts(buf, 1, &map->used);
+  SNetDistribUnpack(buf, &map->used, sizeof(map->used));
   map->size = map->used;
 
   map->keys = SNetMemAlloc(map->used * sizeof(MAP_KEY));
-  #ifndef MAP_CANARY
-    unpackKeys(buf, map->used, map->keys);
-  #else
-    unpackInts(buf, map->used, map->keys);
-  #endif
+  SNetDistribUnpack(buf, map->keys, map->used * sizeof(MAP_KEY));
 
   map->values = SNetMemAlloc(map->used * sizeof(MAP_VAL));
-  unpackValues(buf, map->used, map->values);
+  #ifdef MAP_VAL_DESERIALISE_FUN
+    for (int i = 0; i < map->used; i++) {
+      map->values[i] = MAP_VAL_DESERIALISE_FUN(buf);
+    }
+  #else
+    SNetDistribUnpack(buf, map->values, map->used * sizeof(MAP_VAL));
+  #endif
 }
 
 #ifdef MAP_CANARY
 #undef MAP_KEY
 #undef MAP_CANARY
 #endif
+
 #undef snet_map_t
 #undef MAP_FUNCTION
 #undef MAP

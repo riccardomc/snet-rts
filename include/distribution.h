@@ -1,6 +1,7 @@
 #ifndef _SNET_DISTRIBUTION_H_
 #define _SNET_DISTRIBUTION_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 typedef struct snet_ref snet_ref_t;
@@ -36,6 +37,9 @@ int SNetDistribGetNodeId(void);
 bool SNetDistribIsNodeLocation(int location);
 bool SNetDistribIsRootNode(void);
 
-void SNetDistribPack(void *src, ...);
-void SNetDistribUnpack(void *dst, ...);
+void SNetDistribPackOld(void *src, ...);
+void SNetDistribUnpackOld(void *dst, ...);
+
+void SNetDistribPack(void *buf, void *src, size_t size);
+void SNetDistribUnpack(void *buf, void *dst, size_t size);
 #endif /* _SNET_DISTRIBUTION_H_ */

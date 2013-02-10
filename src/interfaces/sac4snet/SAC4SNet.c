@@ -459,28 +459,12 @@ void SAC4SNetDebugPrintMapping(const char *msg, int *defmap, int cnt)
 
 /************************ Distribution Layer Functions ***********************/
 #ifdef ENABLE_DIST_MPI
-#include <mpi.h>
-#include "pack.h"
-static MPI_Datatype SAC4SNetBasetypeToMPIType( int basetype)
-{
-  switch (basetype) {
-    case SACint: return MPI_INT;
-    case SACflt: return MPI_FLOAT;
-    case SACdbl: return MPI_DOUBLE;
-    default:
-      Error( "Unsupported basetype in type conversion.");
-      break;
-  }
-
-  return MPI_DATATYPE_NULL;
-}
-
 static void SAC4SNetMPIPackFun(void *sacdata, void *buf)
 {
   int *shape;
   void *contents = NULL;
   SACarg *data = sacdata;
-  int type, dims, num_elems = 1;
+  int type, dims;
 
   type = SACARGgetBasetype(data);
   dims = SACARGgetDim(data);
@@ -488,12 +472,11 @@ static void SAC4SNetMPIPackFun(void *sacdata, void *buf)
 
   for (int i = 0; i < dims; i++) {
     shape[i] = SACARGgetShape(data, i);
-    num_elems *= SACARGgetShape(data, i);
   }
 
-  SNetDistribPack(&type, buf, MPI_INT, 1);
-  SNetDistribPack(&dims, buf, MPI_INT, 1);
-  SNetDistribPack(shape, buf, MPI_INT, dims);
+  SNetDistribPack(buf, &type, sizeof(type));
+  SNetDistribPack(buf, &dims, sizeof(dims));
+  SNetDistribPack(buf, shape, dims * sizeof(int));
 
   SNetMemFree(shape);
 
@@ -512,7 +495,7 @@ static void SAC4SNetMPIPackFun(void *sacdata, void *buf)
       break;
   }
 
-  SNetDistribPack(contents, buf, SAC4SNetBasetypeToMPIType(type), num_elems);
+  SNetDistribPack(buf, contents, SAC4SNetAllocSize(data));
   SNetMemFree(contents);
 }
 
@@ -523,17 +506,17 @@ static void *SAC4SNetMPIUnpackFun(void *buf)
   void *contents = NULL;
   int type, dims, num_elems = 1;
 
-  SNetDistribUnpack(&type, buf, MPI_INT, 1);
-  SNetDistribUnpack(&dims, buf, MPI_INT, 1);
+  SNetDistribUnpack(buf, &type, sizeof(type));
+  SNetDistribUnpack(buf, &dims, sizeof(dims));
   shape = SNetMemAlloc(dims * sizeof(int));
-  SNetDistribUnpack(shape, buf, MPI_INT, dims);
+  SNetDistribUnpack(buf, shape, dims * sizeof(int));
 
   for (int i = 0; i < dims; i++) {
     num_elems *= shape[i];
   }
 
   contents = SNetMemAlloc(num_elems * sizeOfType(type));
-  SNetDistribUnpack(contents, buf, SAC4SNetBasetypeToMPIType(type), num_elems);
+  SNetDistribUnpack(buf, contents, num_elems * sizeOfType(type));
 
   switch (type) {
     case SACint:
