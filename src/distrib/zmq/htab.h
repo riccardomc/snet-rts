@@ -42,23 +42,19 @@ htab_host_t *htab_lookup(htab_t *table, size_t index);
 
 //Serialise the host item host in buf.
 void htab_host_pack(htab_host_t *host, void *buf,
-    void (*packInt)(void *, int, int *),
-    void (*packByte)(void *, int, char *));
+    void (*packFun)(void *, void *, size_t)); 
 
 //Deserialise an host item from buf and return it.
 htab_host_t *htab_host_unpack(void *buf, 
-    void (*packInt)(void *, int, int *),
-    void (*packByte)(void *, int, char *));
+    void (*unpackFun)(void *, void *, size_t));
 
 //Serialise the host table table in buf.
   void htab_pack(htab_t *table, void *buf,
-    void (*packInt)(void *, int, int *),
-    void (*packByte)(void *, int, char *));
+    void (*packFun)(void *, void *, size_t)); 
 
 //Deserialise an host table from buf and return it.
 htab_t *htab_unpack(void *buf,
-    void (*packInt)(void *, int, int *),
-    void (*packByte)(void *, int, char *));
+    void (*unpackFun)(void *, void *, size_t)); 
 
 char *htab_gethostname(void);
 #endif

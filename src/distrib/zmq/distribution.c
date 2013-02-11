@@ -90,6 +90,54 @@ void SNetDistribZMQBind(void *socket, int port)
     SNetUtilDebugFatal("ZMQDistrib: Socket bind failed: zsocket_bind: (%d) ", rc);
 }
 
+void SNetDistribZMQPack(zframe_t **dstframe, int count, void *src)
+{
+  if (*dstframe != NULL) {
+    size_t src_size = count;
+    size_t dstframe_size = zframe_size(*dstframe);
+    void *dstframe_data = zframe_data(*dstframe);
+    
+    void *newsrc = SNetMemAlloc(src_size + dstframe_size);
+
+    memcpy(newsrc, dstframe_data, dstframe_size);
+    memcpy(newsrc + dstframe_size, src, src_size);
+
+    zframe_reset(*dstframe, newsrc, dstframe_size + src_size);
+
+    SNetMemFree(newsrc);
+
+  } else {
+    *dstframe = zframe_new(src, count);
+  }
+
+}
+
+void  SNetDistribZMQUnpack(zframe_t **srcframe, int count, void *dst)
+{
+  if (*srcframe != NULL) {
+    size_t dst_size = count;
+    size_t srcframe_size = zframe_size(*srcframe);
+    void *srcframe_data = zframe_data(*srcframe);
+
+    if(dst_size > srcframe_size) {
+      dst = NULL;
+    } else {
+      memcpy(dst, srcframe_data, dst_size);
+      
+      //FIXME: SNetMemAlloc returns null when arg is 0!
+      void *newdst = malloc(srcframe_size - dst_size);
+      
+      memcpy(newdst, srcframe_data + count, srcframe_size - dst_size);
+      zframe_reset(*srcframe, newdst, srcframe_size - dst_size);
+
+      SNetMemFree(newdst);
+    }
+
+  } else {
+    dst = NULL;
+  }
+}
+
 void SNetDistribZMQSync()
 {
   int i = 0;
@@ -137,7 +185,8 @@ void SNetDistribZMQJoin()
 
   htab_f = zframe_recv(sockp); //recv host table
   zstr_send(sockp, ""); //send ack
-  host_table = htab_unpack(&htab_f, &UnpackInt, &UnpackByte);
+  host_table = htab_unpack(&htab_f, &SNetDistribUnpack);
+  htab_dump(host_table);
   zframe_destroy(&htab_f);
 }
 
@@ -169,7 +218,7 @@ void SNetDistribZMQRoot()
     free(str);
   }
 
-  htab_pack(host_table, &htab_f, &PackInt, &PackByte);
+  htab_pack(host_table, &htab_f, &SNetDistribPack);
 
   for (h = 1; h < net_size; h++) {
     void *sockq = zsocket_new(context, ZMQ_REQ);
@@ -242,13 +291,13 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
  
   zmsg_push(msg, payload);
 
-  PackInt(&type_f, 1, &type);
+  SNetDistribPack(&type_f, &type, sizeof(int));
   zmsg_push(msg, type_f);
 
-  PackInt(&source_f, 1, &node_location);
+  SNetDistribPack(&source_f, &node_location, sizeof(int));
   zmsg_push(msg, source_f);
 
-  //printf("-> Sending: %d\n", destination);
+  printf("-> Sending: %d\n", destination);
   
   rc = zmsg_send(&msg, sock_out[destination]);
   if (rc != 0) {
@@ -294,13 +343,12 @@ void SNetDistribUpdateRef(snet_ref_t *ref, int count)
 {
   zframe_t *payload = NULL;
   SNetRefSerialise(ref, &payload);
-  PackInt(&payload, 1, &count);
+  SNetDistribPack(&payload, &count, sizeof(int));
   SNetDistribZMQSend(payload, snet_ref_update, SNetRefNode(ref));
 }
 
 snet_msg_t SNetDistribRecvMsg(void) 
 {
-  int data_v;
   snet_msg_t result;
   zframe_t *source_f;
   zframe_t *type_f;
@@ -320,7 +368,7 @@ snet_msg_t SNetDistribRecvMsg(void)
   //zframe_print(payload_f, "P: ");
 
   int type_v = -1;
-  UnpackInt(&type_f, 1, &type_v);
+  SNetDistribUnpack(&type_f, &type_v, sizeof(int));
   result.type = type_v;
 
   switch(result.type) {
@@ -329,8 +377,8 @@ snet_msg_t SNetDistribRecvMsg(void)
       
     case snet_block:
     case snet_unblock:
-      UnpackInt(&source_f, 1, &result.dest.node);
-      UnpackDest(&payload_f, &result.dest);
+      SNetDistribUnpack(&payload_f, &result.dest, sizeof(snet_dest_t));
+      SNetDistribUnpack(&source_f, &result.dest.node, sizeof(int));
       break;
     case snet_ref_set:
       result.ref = SNetRefDeserialise(&payload_f);
@@ -338,12 +386,11 @@ snet_msg_t SNetDistribRecvMsg(void)
       break;
     case snet_ref_fetch:
       result.ref = SNetRefDeserialise(&payload_f);
-      UnpackInt(&source_f, 1, &data_v);
-      result.data = data_v;
+      SNetDistribUnpack(&source_f, &result.data, sizeof(int));
       break;
     case snet_ref_update:
       result.ref = SNetRefDeserialise(&payload_f);
-      UnpackInt(&payload_f, 1, &result.val);
+      SNetDistribUnpack(&payload_f, &result.val, sizeof(result.val));
       break;
     default:
       break;
@@ -361,28 +408,29 @@ void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 {
   zframe_t *payload = NULL;
   SNetRecSerialise(rec, &payload);
-  PackDest(&payload, &dest);
+  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
   SNetDistribZMQSend(payload, snet_rec, dest.node);
 }
 
 void SNetDistribBlockDest(snet_dest_t dest)
 {
   zframe_t *payload = NULL;
-  PackDest(&payload, &dest);
+  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
   SNetDistribZMQSend(payload, snet_block, dest.node);
 }
 
 void SNetDistribUnblockDest(snet_dest_t dest)
 {
   zframe_t *payload = NULL;
-  PackDest(&payload, &dest);
+  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
   SNetDistribZMQSend(payload, snet_unblock, dest.node);
 }
 
 void SNetDistribUpdateBlocked(void)
 {
+  char pload_v = 0;
   zframe_t *payload = NULL;
-  PackByte(&payload, 1, 0); //FIXME: do we need empty payload messages?
+  SNetDistribPack(&payload, &pload_v, 1);
   SNetDistribZMQSend(payload, snet_update, node_location);
 }
 
@@ -392,8 +440,8 @@ void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
   char data_buf[4096];
   SNetRefSerialise(ref, &payload);
   SNetInterfaceGet(SNetRefInterface(ref))->packfun(data, &data_buf);
-  PackByte(&payload, 4096, data_buf); //FIXME: I don't know actual data size!
-  SNetDistribZMQSend(payload, snet_ref_set,  (uintptr_t) dest);
+  SNetDistribPack(&payload, &dest, sizeof(data_buf)); //FIXME: I don't know actual data size!
+  SNetDistribZMQSend(payload, snet_ref_set, (uintptr_t) dest);
 }
 
 void SNetDistribGlobalStop(void)
@@ -403,7 +451,7 @@ void SNetDistribGlobalStop(void)
 
   for (i--; i >= 0; i--) {
     zframe_t *payload = NULL;
-    PackByte(&payload, 1, &pload_v);
+    SNetDistribPack(&payload, &pload_v, 1);
 
     SNetDistribZMQSend(payload, snet_stop, i);
   }
@@ -426,12 +474,10 @@ bool SNetDistribIsRootNode(void)
 
 void SNetDistribPack(void *buf, void *src, size_t size)
 {
-  //FIXME
-  ZMQPack((zframe_t **)buf, size, src);
+  SNetDistribZMQPack((zframe_t **)buf, size, src);
 }
 
 void SNetDistribUnpack(void *buf, void *dst, size_t size)
 {
-  //FIXME
-  ZMQUnpack((zframe_t **)buf, size, dst);
+  SNetDistribZMQUnpack((zframe_t **)buf, size, dst);
 }

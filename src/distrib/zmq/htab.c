@@ -118,57 +118,42 @@ htab_t *htab_fread(char *tablefile)
 }
 
 void htab_host_pack(htab_host_t *host, void *buf,
-    void (*packInt)(void *, int, int *),
-    void (*packByte)(void *, int, char *))
+    void (*packFun)(void *, void *, size_t))
 {
-  packInt(buf, 1, &host->data_port);
-  packInt(buf, 1, &host->sync_port);
-  packByte(buf, HTAB_HNAME_LEN, host->host);
-  packByte(buf, HTAB_HNAME_LEN, host->bind);
+  packFun(buf, host, sizeof(htab_host_t));
 }
 
 htab_host_t *htab_host_unpack(void *buf,
-    void (*unpackInt)(void *, int, int *), 
-    void (*unpackByte)(void *, int, char *)) 
+    void (*unpackFun)(void *, void *, size_t)) 
 {
   htab_host_t *host = htab_host_alloc();
-
-  unpackInt(buf, 1, &host->data_port);
-  unpackInt(buf, 1, &host->sync_port);
-  unpackByte(buf, HTAB_HNAME_LEN, host->host);
-  unpackByte(buf, HTAB_HNAME_LEN, host->bind);
-
+  unpackFun(buf, host, sizeof(htab_host_t));
   return host;
 }
 
 void htab_pack(htab_t *table, void *buf,
-    void (*packInt)(void *, int, int *), 
-    void (*packByte)(void *, int, char *)) 
+    void (*packFun)(void *, void *, size_t))
 {
   int i;
 
-  packInt(buf, 1, &table->size);
+  packFun(buf, &table->size, sizeof(int));
   for (i = 0; i < htab_size(table); i++) {
-    htab_host_pack(table->tab[i], buf, packInt, packByte);
+    htab_host_pack(table->tab[i], buf, packFun);
   }
 
 }
 
 htab_t *htab_unpack(void *buf,
-    void (*unpackInt)(void *, int, int *),
-    void (*unpackByte)(void *, int, char *))
+    void (*unpackFun)(void *, void *, size_t)) 
 {
   int size, i;
   htab_t *table;
 
-  unpackInt(buf, 1, &size);
+  unpackFun(buf, &size, sizeof(int));
   table = htab_alloc(size);
 
   for (i = 0; i < size; i++) {
-    unpackInt(buf, 1, &table->tab[i]->data_port);
-    unpackInt(buf, 1, &table->tab[i]->sync_port);
-    unpackByte(buf, HTAB_HNAME_LEN, table->tab[i]->host);
-    unpackByte(buf, HTAB_HNAME_LEN, table->tab[i]->bind);
+    unpackFun(buf, table->tab[i], sizeof(htab_host_t));
   }
 
   return table;
