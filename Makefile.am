@@ -189,7 +189,6 @@ libdistribmpi_la_SOURCES = \
 	src/distrib/common/distribcommon.c \
 	src/distrib/common/distribcommon.h \
 	src/distrib/mpi/distribution.c \
-	src/distrib/mpi/pack.h \
 	src/distrib/mpi/transmit.c
 libdistribmpi_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
@@ -237,7 +236,6 @@ libdistribzmq_la_SOURCES = \
 	src/distrib/zmq/distribution.c \
 	src/distrib/zmq/htab.c \
 	src/distrib/zmq/htab.h \
-	src/distrib/zmq/pack.h
 libdistribzmq_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/zmq \

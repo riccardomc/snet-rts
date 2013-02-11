@@ -17,7 +17,6 @@
 #include "distribcommon.h"
 #include "interface_functions.h"
 #include "omanager.h"
-#include "pack.h"
 #include "record.h"
 #include "reference.h"
 #include "htab.h"
