@@ -184,7 +184,6 @@ void SNetDistribZMQJoin()
   htab_f = zframe_recv(sockp); //recv host table
   zstr_send(sockp, ""); //send ack
   host_table = htab_unpack(&htab_f, &SNetDistribUnpack);
-  htab_dump(host_table);
   zframe_destroy(&htab_f);
 }
 
@@ -295,7 +294,7 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
   SNetDistribPack(&source_f, &node_location, sizeof(int));
   zmsg_push(msg, source_f);
 
-  printf("-> Sending: %d\n", destination);
+  //printf("-> Sending: %d\n", destination);
   
   rc = zmsg_send(&msg, sock_out[destination]);
   if (rc != 0) {
