@@ -89,14 +89,14 @@ void SNetDistribZMQBind(void *socket, int port)
     SNetUtilDebugFatal("ZMQDistrib: Socket bind failed: zsocket_bind: (%d) ", rc);
 }
 
-void SNetDistribZMQPack(zframe_t **dstframe, int count, void *src)
+void SNetDistribZMQPack(zframe_t **dstframe, void *src, size_t count)
 {
   if (*dstframe != NULL) {
     size_t src_size = count;
     size_t dstframe_size = zframe_size(*dstframe);
-    void *dstframe_data = zframe_data(*dstframe);
+    byte *dstframe_data = zframe_data(*dstframe);
     
-    void *newsrc = SNetMemAlloc(src_size + dstframe_size);
+    byte *newsrc = SNetMemAlloc(src_size + dstframe_size);
 
     memcpy(newsrc, dstframe_data, dstframe_size);
     memcpy(newsrc + dstframe_size, src, src_size);
@@ -108,15 +108,14 @@ void SNetDistribZMQPack(zframe_t **dstframe, int count, void *src)
   } else {
     *dstframe = zframe_new(src, count);
   }
-
 }
 
-void  SNetDistribZMQUnpack(zframe_t **srcframe, int count, void *dst)
+void  SNetDistribZMQUnpack(zframe_t **srcframe, void *dst, size_t count)
 {
   if (*srcframe != NULL) {
     size_t dst_size = count;
     size_t srcframe_size = zframe_size(*srcframe);
-    void *srcframe_data = zframe_data(*srcframe);
+    byte *srcframe_data = zframe_data(*srcframe);
 
     if(dst_size > srcframe_size) {
       dst = NULL;
@@ -124,7 +123,7 @@ void  SNetDistribZMQUnpack(zframe_t **srcframe, int count, void *dst)
       memcpy(dst, srcframe_data, dst_size);
       
       //FIXME: SNetMemAlloc returns null when arg is 0!
-      void *newdst = malloc(srcframe_size - dst_size);
+      byte *newdst = malloc(srcframe_size - dst_size);
       
       memcpy(newdst, srcframe_data + count, srcframe_size - dst_size);
       zframe_reset(*srcframe, newdst, srcframe_size - dst_size);
@@ -473,10 +472,10 @@ bool SNetDistribIsRootNode(void)
 
 void SNetDistribPack(void *buf, void *src, size_t size)
 {
-  SNetDistribZMQPack((zframe_t **)buf, size, src);
+  SNetDistribZMQPack((zframe_t **)buf, src, size);
 }
 
 void SNetDistribUnpack(void *buf, void *dst, size_t size)
 {
-  SNetDistribZMQUnpack((zframe_t **)buf, size, dst);
+  SNetDistribZMQUnpack((zframe_t **)buf, dst, size);
 }
