@@ -120,14 +120,20 @@ htab_t *htab_fread(char *tablefile)
 void htab_host_pack(htab_host_t *host, void *buf,
     void (*packFun)(void *, void *, size_t))
 {
-  packFun(buf, host, sizeof(htab_host_t));
+  packFun(buf, &host->data_port, sizeof(int));
+  packFun(buf, &host->sync_port, sizeof(int));
+  packFun(buf, host->host, HTAB_HNAME_LEN);
+  packFun(buf, host->bind, HTAB_HNAME_LEN);
 }
 
 htab_host_t *htab_host_unpack(void *buf,
     void (*unpackFun)(void *, void *, size_t)) 
 {
   htab_host_t *host = htab_host_alloc();
-  unpackFun(buf, host, sizeof(htab_host_t));
+  unpackFun(buf, &host->data_port, sizeof(int));
+  unpackFun(buf, &host->sync_port, sizeof(int));
+  unpackFun(buf, host->host, HTAB_HNAME_LEN);
+  unpackFun(buf, host->bind, HTAB_HNAME_LEN);
   return host;
 }
 
@@ -153,7 +159,7 @@ htab_t *htab_unpack(void *buf,
   table = htab_alloc(size);
 
   for (i = 0; i < size; i++) {
-    unpackFun(buf, table->tab[i], sizeof(htab_host_t));
+    table->tab[i] = htab_host_unpack(buf, unpackFun);
   }
 
   return table;
