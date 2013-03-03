@@ -545,7 +545,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
       SNetInfoDestroy(newInfo);
     }
 
-    SNetVariantListListDestroy( variant_lists);
+    //SNetVariantListListDestroy( variant_lists);
 
     outstream = instream;
   }

@@ -198,7 +198,7 @@ snet_stream_t *SNetBoxInst(snet_stream_t *input,
 
 
   } else {
-    SNetIntListListDestroy(output_variants);
+    //SNetIntListListDestroy(output_variants);
     output = input;
   }
 

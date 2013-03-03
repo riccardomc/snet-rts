@@ -508,8 +508,8 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
           "<fbdisp>"), &FeedbackDispTask, fbdarg);
 
   } else {
-    SNetVariantListDestroy(back_patterns);
-    SNetExprListDestroy(guards);
+    //SNetVariantListDestroy(back_patterns);
+    //SNetExprListDestroy(guards);
     output = SNetInstantiate(box_a, input, info);
     output = SNetRouteUpdate(info, output, location, locvec);
   }

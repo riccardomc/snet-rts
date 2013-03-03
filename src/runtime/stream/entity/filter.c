@@ -489,7 +489,7 @@ snet_stream_t *SNetNameShiftInst( snet_stream_t *instream,
     SNetThreadingSpawn( ENTITY_nameshift, location, SNetNameCreate(locvec, SNetIdGet(info),
           "<nameshift>"), &NameshiftTask, farg);
   } else {
-    SNetVariantDestroy( untouched);
+    //SNetVariantDestroy( untouched);
     outstream = instream;
   }
 
