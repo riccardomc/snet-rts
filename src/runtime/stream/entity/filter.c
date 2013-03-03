@@ -337,7 +337,7 @@ static snet_stream_t* CreateFilter( snet_stream_t *instream,
   /* Check for bypass
    * - if it is a bypass, exit out early and do not create any component
    */
-  instream = SNetRouteUpdate(info, instream, location);
+  instream = SNetRouteUpdate(info, instream, location, locvec);
   if(SNetDistribIsNodeLocation(location) &&
       !FilterIsBypass(input_variant, guard_exprs, instr_list)) {
     outstream = SNetStreamCreate(0);
@@ -410,6 +410,7 @@ snet_ast_t* SNetFilter(int location,
   result->location = location;
   result->type = snet_filter;
   result->locvec.type = LOC_FILTER;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->filter.input_variant = input_variant;
@@ -451,6 +452,7 @@ snet_ast_t* SNetTranslate(int location,
   result->location = location;
   result->type = snet_translate;
   result->locvec.type = LOC_FILTER;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->filter.input_variant = input_variant;
@@ -473,7 +475,7 @@ snet_stream_t *SNetNameShiftInst( snet_stream_t *instream,
   snet_stream_t *outstream;
   filter_arg_t *farg;
 
-  instream = SNetRouteUpdate(info, instream, location);
+  instream = SNetRouteUpdate(info, instream, location, locvec);
   if(SNetDistribIsNodeLocation(location)) {
     outstream = SNetStreamCreate(0);
 
@@ -502,6 +504,7 @@ snet_ast_t *SNetNameShift(int location,
   result->location = location;
   result->type = snet_nameshift;
   result->locvec.type = LOC_FILTER;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->nameshift.offset = offset;

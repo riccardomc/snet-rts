@@ -10,6 +10,7 @@ typedef struct snet_ref snet_ref_t;
 #include "stream.h"
 #include "snettypes.h"
 #include "bool.h"
+#include "ast.h"
 
 /* Provided by common distribution interface in src/distrib/common */
 void SNetDistribInit(int argc, char** argv, snet_info_t *info);
@@ -17,11 +18,8 @@ void SNetDistribStart(void);
 void SNetDistribStop(void);
 void SNetDistribWaitExit(snet_info_t *info);
 
-snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in, int loc);
-void SNetRouteDynamicEnter(snet_info_t *info, int dynamicIndex, int dynamicLoc,
-                           snet_startup_fun_t fun);
-void SNetRouteDynamicExit(snet_info_t *info, int dynamicIndex, int dynamicLoc,
-                          snet_startup_fun_t fun);
+snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
+                              int location, snet_locvec_t *locvec);
 
 snet_ref_t *SNetRefCreate(void *data, int interface);
 snet_ref_t *SNetRefCopy(snet_ref_t *ref);

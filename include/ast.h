@@ -2,7 +2,11 @@
 #define AST_H
 
 #include "list.h"
+#include "memfun.h"
 #include "snettypes.h"
+
+void SNetDistribPack(void *buf, void *src, size_t size);
+void SNetDistribUnpack(void *buf, void *dst, size_t size);
 
 typedef snet_int_list_t snet_id_t;
 
@@ -10,14 +14,24 @@ void SNetIdInit(snet_info_t *info);
 void SNetIdAppend(snet_info_t *info, int i);
 void SNetIdInc(snet_info_t *info);
 int SNetIdTop(snet_info_t *info);
+void SNetIdDump(snet_info_t *info);
+void SNetIdDumpAux(snet_id_t *id);
 
 void SNetIdSet(snet_info_t *info, snet_id_t *id);
 snet_id_t *SNetIdGet(snet_info_t *info);
 
-snet_stream_t *SNetInstantiate(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info);
-snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info, int location);
+inline static bool SNetIdCompare(snet_id_t *id1, snet_id_t *id2)
+{
+  bool result = true;
+  int i, len = SNetIntListLength(id1);
 
-void SNetASTCleanup(snet_ast_t *tree);
+  result = len == SNetIntListLength(id2);
+  for (i = 0; result && (i < len); i++) {
+    result = SNetIntListGet(id1, i) == SNetIntListGet(id2, i);
+  }
+
+  return result;
+}
 
 enum snet_types {
     snet_box,
@@ -73,11 +87,54 @@ typedef enum {
 
 typedef struct loc_item {
   snet_loctype_t type;
-  int num;
+  int index, num;
   struct loc_item *parent;
 } snet_locvec_t;
 
 const char *SNetNameCreate(snet_locvec_t *locvec, snet_id_t *id, const char *name);
+
+inline static bool SNetLocvecCompare(snet_locvec_t *l1, snet_locvec_t *l2)
+{
+  bool result = true;
+  while (result && l1 && l2) {
+    result = l1->index == l2->index &&
+      l1->type == l2->type &&
+      l1->num == l2->num;
+    l1 = l1->parent;
+    l2 = l2->parent;
+  }
+
+  if ((!l1 && l2) || (l1 && !l2)) {
+    result = false;
+  }
+
+  return result;
+}
+
+inline static snet_locvec_t *SNetLocvecItemCopy(snet_locvec_t *locvec)
+{
+  snet_locvec_t *result = SNetMemAlloc(sizeof(snet_locvec_t));
+  *result = *locvec;
+  result->parent = NULL;
+  return result;
+}
+
+inline static void SNetLocvecItemSerialise(snet_locvec_t *locvec, void *buf)
+{
+  SNetDistribPack(buf, &locvec->type, sizeof(snet_loctype_t));
+  SNetDistribPack(buf, &locvec->index, sizeof(int));
+  SNetDistribPack(buf, &locvec->num, sizeof(int));
+}
+
+inline static snet_locvec_t *SNetLocvecItemDeserialise(void *buf)
+{
+  snet_locvec_t *locvec = SNetMemAlloc(sizeof(snet_locvec_t));
+  SNetDistribUnpack(buf, &locvec->type, sizeof(snet_loctype_t));
+  SNetDistribUnpack(buf, &locvec->index, sizeof(int));
+  SNetDistribUnpack(buf, &locvec->num, sizeof(int));
+  locvec->parent = NULL;
+  return locvec;
+}
 
 //---------------------
 
@@ -130,4 +187,22 @@ struct SNET_AST {
         snet_split_t split;
     };
 };
+
+
+snet_stream_t *SNetInstantiate(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info);
+snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input, snet_info_t *info, int location);
+
+snet_ast_t *SNetASTInit(snet_startup_fun_t fun, int location);
+int SNetASTRegister(snet_ast_t *tree);
+int SNetASTDeregister(snet_ast_t *tree);
+snet_ast_t *SNetASTLookup(int index);
+snet_ast_t *SNetASTInit(snet_startup_fun_t fun, int location);
+void SNetASTCleanup();
+
+inline static bool SNetAstCompare(snet_ast_t *a1, snet_ast_t *a2)
+{
+  //FIXME
+  return false;
+}
+
 #endif

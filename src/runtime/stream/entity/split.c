@@ -24,6 +24,7 @@ typedef struct {
   bool is_det;
   bool is_byloc;
   int location;
+  snet_locvec_t *locvec;
   /* a list of all outstreams for all yet created instances */
   snet_streamset_t repos_set;
   snet_stream_iter_t *iter;
@@ -76,15 +77,11 @@ static void SplitBoxTask(void *arg)
           SNetIdAppend(info, i);
 
           if( sarg->is_byloc) {
-            SNetRouteDynamicEnter(info, i, i, NULL);
-            temp_stream = SNetInstantiate(sarg->box, newstream_addr, info);
-            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location);
-            SNetRouteDynamicExit(info, i, i, NULL);
+            temp_stream = SNetInstantiatePlacement(sarg->box, newstream_addr, info, i);
+            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, &sarg->box->locvec);
           } else {
-            SNetRouteDynamicEnter(info, i, sarg->location, NULL);
             temp_stream = SNetInstantiate(sarg->box, newstream_addr, info);
-            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location);
-            SNetRouteDynamicExit(info, i, sarg->location, NULL);
+            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, &sarg->box->locvec);
           }
 
           /* destroy info and location vector */
@@ -220,7 +217,7 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
   snet_stream_t *initial, *output;
   split_arg_t *sarg;
 
-  input = SNetRouteUpdate(newInfo, input, location);
+  input = SNetRouteUpdate(info, input, location, locvec);
   if(SNetDistribIsNodeLocation(location)) {
     initial = SNetStreamCreate(0);
 
@@ -234,6 +231,7 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
     sarg->is_det = is_det;
     sarg->is_byloc = is_byloc;
     sarg->location = location;
+    sarg->locvec = locvec;
     /* a list of all outstreams for all yet created instances */
     sarg->repos_set = NULL;
     sarg->iter = SNetStreamIterCreate( &sarg->repos_set);
@@ -282,11 +280,13 @@ snet_ast_t *SNetSplit(int location,
   result->location = location;
   result->type = snet_split;
   result->locvec.type = LOC_SPLIT;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->split.det = false;
   result->split.loc = false;
   result->split.box_a = box_a(location);
+  result->split.box_a->locvec.parent = &result->locvec;
   result->split.ltag = ltag;
   result->split.utag = utag;
   return result;
@@ -319,11 +319,13 @@ snet_ast_t *SNetSplitDet(int location,
   result->location = location;
   result->type = snet_split;
   result->locvec.type = LOC_SPLIT;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->split.det = true;
   result->split.loc = false;
   result->split.box_a = box_a(location);
+  result->split.box_a->locvec.parent = &result->locvec;
   result->split.ltag = ltag;
   result->split.utag = utag;
   return result;
@@ -354,11 +356,13 @@ snet_ast_t *SNetLocSplit(int location,
   result->location = location;
   result->type = snet_split;
   result->locvec.type = LOC_SPLIT;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->split.det = false;
   result->split.loc = true;
-  result->split.box_a = box_a(-1);
+  result->split.box_a = box_a(location);
+  result->split.box_a->locvec.parent = &result->locvec;
   result->split.ltag = ltag;
   result->split.utag = utag;
   return result;
@@ -389,11 +393,13 @@ snet_ast_t *SNetLocSplitDet(int location,
   result->location = location;
   result->type = snet_split;
   result->locvec.type = LOC_SPLIT;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->split.det = true;
   result->split.loc = true;
-  result->split.box_a = box_a(-1);
+  result->split.box_a = box_a(location);
+  result->split.box_a->locvec.parent = &result->locvec;
   result->split.ltag = ltag;
   result->split.utag = utag;
   return result;

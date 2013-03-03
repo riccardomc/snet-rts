@@ -9,7 +9,32 @@
 #include "snetentities.h"
 #include "distribution.h"
 
+#define MAP_NAME_H Ast
+#define MAP_TYPE_NAME_H ast
+#define MAP_KEY_H int
+#define MAP_VAL_H snet_ast_t*
+#include "map-template.h"
+#undef MAP_VAL_H
+#undef MAP_KEY_H
+#undef MAP_TYPE_NAME_H
+#undef MAP_NAME_H
+
+#define MAP_NAME Ast
+#define MAP_TYPE_NAME ast
+#define MAP_KEY int
+#define MAP_VAL snet_ast_t*
+#define MAP_VAL_CMP SNetAstCompare
+#include "map-template.c"
+#undef MAP_VAL
+#undef MAP_VAL_CMP
+#undef MAP_KEY
+#undef MAP_TYPE_NAME
+#undef MAP_NAME
+
 static snet_info_tag_t id_tag;
+static snet_ast_t *AST = NULL;
+static snet_ast_map_t *AST_map = NULL;
+static int AST_index = 0;
 
 void SNetIdInit(snet_info_t *info)
 {
@@ -17,17 +42,37 @@ void SNetIdInit(snet_info_t *info)
   SNetInfoSetTag(info, id_tag, (uintptr_t) SNetIntListCreate(0), (void *(*)(void *)) &SNetIntListCopy, (void (*)(void *)) &SNetIntListDestroy);
 }
 
+void SNetIdDumpAux(snet_id_t *id)
+{
+  int val;
+  printf("[ ");
+  LIST_FOR_EACH(id, val) {
+    printf("%d ", val);
+  }
+  printf("]");
+}
+
+void SNetIdDump(snet_info_t *info)
+{
+  SNetIdDumpAux(SNetIdGet(info));
+}
+
 void SNetIdSet(snet_info_t *info, snet_id_t *id)
-{ SNetInfoSetTag(info, id_tag, (uintptr_t) id,
+{
+  SNetInfoSetTag(info, id_tag, (uintptr_t) id,
                  (void *(*)(void *)) &SNetIntListCopy,
                  (void (*)(void *)) &SNetIntListDestroy);
 }
 
 snet_id_t *SNetIdGet(snet_info_t *info)
-{ return (snet_id_t*) SNetInfoGetTag(info, id_tag); }
+{
+  return (snet_id_t*) SNetInfoGetTag(info, id_tag);
+}
 
 void SNetIdAppend(snet_info_t *info, int i)
-{ SNetIntListAppendStart(SNetIdGet(info), i); }
+{
+  SNetIntListAppendStart(SNetIdGet(info), i);
+}
 
 void SNetIdInc(snet_info_t *info)
 {
@@ -36,7 +81,9 @@ void SNetIdInc(snet_info_t *info)
 }
 
 int SNetIdTop(snet_info_t *info)
-{ return SNetIntListGet(SNetIdGet(info), 0); }
+{
+  return SNetIntListGet(SNetIdGet(info), 0);
+}
 
 inline static int max(int x, int y) { return x > y ? x : y; }
 
@@ -46,8 +93,11 @@ inline static int num_digits(int x)
   if (x == 0) return 1;
   else return ceil(log10(x + 1));
 }
+
 inline static bool parentStarOrSplit(snet_locvec_t *l)
-{ return l && l->parent && (l->parent->type == LOC_SPLIT || l->parent->type == LOC_STAR); }
+{
+  return l && l->parent && (l->parent->type == LOC_SPLIT || l->parent->type == LOC_STAR);
+}
 
 static int locvecSize(snet_id_t *id, snet_locvec_t *locvec, int *idx)
 {
@@ -233,9 +283,35 @@ snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input,
 
 snet_stream_t *SNetInstantiate(snet_ast_t *tree, snet_stream_t *input,
                                snet_info_t *info)
-{ return SNetInstantiatePlacement(tree, input, info, -1); }
+{
+  return SNetInstantiatePlacement(tree, input, info, -1);
+}
 
-void SNetASTCleanup(snet_ast_t *tree)
+snet_ast_t *SNetASTInit(snet_startup_fun_t fun, int location)
+{
+  AST_map = SNetAstMapCreate(0);
+  AST = fun(location);
+  return AST;
+}
+
+snet_ast_t *SNetASTLookup(int index)
+{
+  return SNetAstMapGet(AST_map, index);
+}
+
+int SNetASTRegister(snet_ast_t *tree)
+{
+  SNetAstMapSet(AST_map, AST_index, tree);
+  return AST_index++;
+}
+
+int SNetASTDeregister(snet_ast_t *tree)
+{
+  //FIXME
+  return 0;
+}
+
+void SNetAstCleanup(snet_ast_t *tree)
 {
     switch (tree->type) {
         case snet_box:
@@ -270,17 +346,17 @@ void SNetASTCleanup(snet_ast_t *tree)
         case snet_feedback:
             SNetVariantListDestroy(tree->feedback.back_patterns);
             SNetExprListDestroy(tree->feedback.guards);
-            SNetASTCleanup(tree->feedback.box_a);
+            SNetAstCleanup(tree->feedback.box_a);
             break;
         case snet_serial:
-            SNetASTCleanup(tree->serial.box_a);
-            SNetASTCleanup(tree->serial.box_b);
+            SNetAstCleanup(tree->serial.box_a);
+            SNetAstCleanup(tree->serial.box_b);
             break;
         case snet_parallel:
             {
               int num = SNetVariantListListLength(tree->parallel.variant_lists);
               for (int i = 0; i < num; i++) {
-                SNetASTCleanup(tree->parallel.branches[i]);
+                SNetAstCleanup(tree->parallel.branches[i]);
               }
 
               SNetVariantListListDestroy(tree->parallel.variant_lists);
@@ -288,17 +364,23 @@ void SNetASTCleanup(snet_ast_t *tree)
             }
             break;
         case snet_split:
-            SNetASTCleanup(tree->split.box_a);
+            SNetAstCleanup(tree->split.box_a);
             break;
         case snet_star:
             SNetExprListDestroy(tree->star.guards);
             SNetVariantListDestroy(tree->star.exit_patterns);
-            SNetASTCleanup(tree->star.box_a);
-            if (!tree->star.incarnate) SNetASTCleanup(tree->star.box_b);
+            SNetAstCleanup(tree->star.box_a);
+            if (!tree->star.incarnate) SNetAstCleanup(tree->star.box_b);
             break;
         default:
-            SNetUtilDebugFatal("Combinator not implemented.");
+             SNetUtilDebugFatal("Combinator not implemented.");
             break;
     }
     SNetMemFree(tree);
 }
+
+void SNetASTCleanup()
+{
+  SNetAstCleanup(AST);
+}
+

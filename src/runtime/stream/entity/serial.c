@@ -40,6 +40,7 @@ snet_ast_t *SNetSerial(int location,
   snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
   result->location = location;
   result->locvec.type = LOC_SERIAL;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->type = snet_serial;

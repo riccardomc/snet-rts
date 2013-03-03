@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <pthread.h>
 
-#include "ast.h" //FIXME
+#include "ast.h"
 #include "debug.h"
 #include "distribcommon.h"
 #include "imanager.h"

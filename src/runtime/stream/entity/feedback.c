@@ -449,7 +449,7 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
 {
   snet_stream_t *output;
 
-  input = SNetRouteUpdate(info, input, location);
+  input = SNetRouteUpdate(info, input, location, locvec);
   if (SNetDistribIsNodeLocation(location)) {
     snet_stream_t *into_op, *from_op;
     snet_stream_t *back_bufin, *back_bufout;
@@ -495,7 +495,7 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
 
     /* create the instance network */
     from_op = SNetInstantiate(box_a, into_op, info);
-    from_op = SNetRouteUpdate(info, from_op, location);
+    from_op = SNetRouteUpdate(info, from_op, location, locvec);
 
     /* create the feedback dispatcher */
     fbdarg = SNetMemAlloc( sizeof( fbdisp_arg_t));
@@ -511,7 +511,7 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
     SNetVariantListDestroy(back_patterns);
     SNetExprListDestroy(guards);
     output = SNetInstantiate(box_a, input, info);
-    output = SNetRouteUpdate(info, output, location);
+    output = SNetRouteUpdate(info, output, location, locvec);
   }
 
   return output;
@@ -526,6 +526,7 @@ snet_ast_t *SNetFeedback(int location,
   result->location = location;
   result->type = snet_feedback;
   result->locvec.type = LOC_FEEDBACK;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->feedback.back_patterns = back_patterns;

@@ -404,21 +404,20 @@ void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 {
   zframe_t *payload = NULL;
   SNetRecSerialise(rec, &payload);
-  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
+  SNetDestSerialise(&dest, &payload);
   SNetDistribZMQSend(payload, snet_rec, dest.node);
 }
 
 void SNetDistribBlockDest(snet_dest_t dest)
 {
   zframe_t *payload = NULL;
-  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
   SNetDistribZMQSend(payload, snet_block, dest.node);
 }
 
 void SNetDistribUnblockDest(snet_dest_t dest)
 {
   zframe_t *payload = NULL;
-  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
+  SNetDestSerialise(&dest, &payload);
   SNetDistribZMQSend(payload, snet_unblock, dest.node);
 }
 

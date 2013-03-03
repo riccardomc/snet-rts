@@ -500,7 +500,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
 
   num = SNetVariantListListLength( variant_lists);
 
-  instream = SNetRouteUpdate(info, instream, location);
+  instream = SNetRouteUpdate(info, instream, location, locvec);
   if(SNetDistribIsNodeLocation(location)) {
     transits    = SNetMemAlloc( num * sizeof( snet_stream_t*));
     collstreams = SNetMemAlloc( num * sizeof( snet_stream_t*));
@@ -511,7 +511,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
       transits[i] = SNetStreamCreate(0);
       ast = asts[i];
       collstreams[i] = SNetInstantiate(ast, transits[i], newInfo);
-      collstreams[i] = SNetRouteUpdate(newInfo, collstreams[i], location);
+      collstreams[i] = SNetRouteUpdate(newInfo, collstreams[i], location, locvec); //FIXME does this need its own index?
       SNetInfoDestroy(newInfo);
     }
 
@@ -541,7 +541,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
       snet_info_t *newInfo = SNetInfoCopy(info);
       ast = asts[i];
       instream = SNetInstantiate(ast, instream, newInfo);
-      instream = SNetRouteUpdate(newInfo, instream, location);
+      instream = SNetRouteUpdate(newInfo, instream, location, locvec); //FIXME See above
       SNetInfoDestroy(newInfo);
     }
 
@@ -581,6 +581,7 @@ snet_ast_t *SNetParallel(int location,
   result->location = location;
   result->type = snet_parallel;
   result->locvec.type = LOC_PARALLEL;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->parallel.det = false;
@@ -626,6 +627,7 @@ snet_ast_t *SNetParallelDet(int location,
   result->location = location;
   result->type = snet_parallel;
   result->locvec.type = LOC_PARALLEL;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->parallel.det = true;

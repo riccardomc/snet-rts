@@ -73,10 +73,8 @@ static snet_stream_t *SNetSerialStarchild(snet_stream_t *input,
   int i = SNetIdTop(info);
 
   /* create operand A */
-  SNetRouteDynamicEnter(info, i, location, NULL);
   internal_stream = SNetInstantiate(box_a, input, info);
-  internal_stream = SNetRouteUpdate(info, internal_stream, location);
-  SNetRouteDynamicExit(info, i, location, NULL);
+  internal_stream = SNetRouteUpdate(info, internal_stream, location, &box_a->locvec);
 
   /* create operand B */
   output = SNetInstantiate(box_b, internal_stream, info);
@@ -355,7 +353,7 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
   star_arg_t *sarg;
   snet_stream_t *newstream;
 
-  input = SNetRouteUpdate(info, input, location);
+  input = SNetRouteUpdate(info, input, location, locvec);
   if(SNetDistribIsNodeLocation(location)) {
     /* create the task argument */
     sarg = SNetMemAlloc( sizeof(star_arg_t));
@@ -370,8 +368,11 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
     sarg->guards = guards;
     sarg->info = SNetInfoCopy(info);
 
-    if (is_incarnate) SNetIdInc(sarg->info);
-    else SNetIdAppend(sarg->info, 0);
+    if (is_incarnate) {
+      SNetIdInc(sarg->info);
+    } else {
+      SNetIdAppend(sarg->info, 0);
+    }
 
     sarg->is_incarnate = is_incarnate;
     sarg->is_det = is_det;
@@ -430,6 +431,7 @@ snet_ast_t *SNetStar(int location,
   result->location = location;
   result->type = snet_star;
   result->locvec.type = LOC_STAR;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->star.det = false;
@@ -472,6 +474,7 @@ snet_ast_t *SNetStarIncarnate(int location,
   result->location = location;
   result->type = snet_star;
   result->locvec.type = LOC_STAR;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->star.det = false;
@@ -513,6 +516,7 @@ snet_ast_t *SNetStarDet(int location,
   result->location = location;
   result->type = snet_star;
   result->locvec.type = LOC_STAR;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->star.det = true;
@@ -554,6 +558,7 @@ snet_ast_t *SNetStarDetIncarnate(int location,
   result->location = location;
   result->type = snet_star;
   result->locvec.type = LOC_STAR;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->star.det = true;

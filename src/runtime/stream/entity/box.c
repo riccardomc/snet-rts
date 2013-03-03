@@ -146,7 +146,7 @@ snet_stream_t *SNetBoxInst(snet_stream_t *input,
   box_arg_t *barg;
   snet_variant_list_t *vlist;
 
-  input = SNetRouteUpdate(info, input, location);
+  input = SNetRouteUpdate(info, input, location, locvec);
 
   if (SNetDistribIsNodeLocation(location)) {
     snet_int_list_t *list;
@@ -217,6 +217,7 @@ snet_ast_t *SNetBox(int location,
   result->location = location;
   result->type = snet_box;
   result->locvec.type = LOC_BOX;
+  result->locvec.index = SNetASTRegister(result);
   result->locvec.num = -1;
   result->locvec.parent = NULL;
   result->box.boxname = boxname;

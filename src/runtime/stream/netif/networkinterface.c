@@ -260,11 +260,12 @@ int SNetInRun(int argc, char **argv,
   SNetObserverInit(labels, interfaces);
 
   SNetIdInit(info);
+  SNetIdAppend(info, 0);
 
-  snet_ast_t *ast = fun(0);
+  snet_ast_t *ast = SNetASTInit(fun, 0);
   input_stream = SNetStreamCreate(0);
   output_stream = SNetInstantiate(ast, input_stream, info);
-  output_stream = SNetRouteUpdate(info, output_stream, 0);
+  output_stream = SNetRouteUpdate(info, output_stream, 0, &ast->locvec);
 
   SNetDistribStart();
 
@@ -277,7 +278,7 @@ int SNetInRun(int argc, char **argv,
   }
 
   SNetDistribWaitExit(info);
-  SNetASTCleanup(ast);
+  SNetASTCleanup();
 
   /* tell the threading layer that it is ok to shutdown,
      and wait until it has stopped such that it can be cleaned up */

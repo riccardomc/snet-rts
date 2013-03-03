@@ -3,6 +3,8 @@
 
 #include "memfun.h"
 #include "threading.h"
+#include "list.h"
+#include "ast.h"
 
 typedef enum {
   snet_rec,
@@ -15,13 +17,10 @@ typedef enum {
   snet_stop
 } snet_comm_type_t;
 
-typedef struct {
-  int node,
-      dest,
-      parent,
-      parentNode,
-      dynamicIndex,
-      dynamicLoc;
+typedef struct  {
+  int node;
+  int dest;
+  snet_id_t *id;
 } snet_dest_t;
 
 typedef struct {
@@ -40,17 +39,45 @@ typedef struct {
   int val;
 } snet_msg_t;
 
+inline static void SNetDestDump(snet_dest_t dest, char *prefix)
+{
+  printf("%s: %d %d ", prefix, dest.node, dest.dest);
+  SNetIdDumpAux(dest.id);
+  printf("\n");
+}
+
 inline static bool SNetDestCompare(snet_dest_t d1, snet_dest_t d2)
 {
-  return d1.node == d2.node && d1.dest == d2.dest &&
-         d1.parent == d2.parent && d1.dynamicIndex == d2.dynamicIndex;
+
+  bool res = d1.node == d2.node &&
+    d1.dest == d2.dest &&
+    SNetIdCompare(d1.id, d2.id);
+
+  return res;
 }
 
 inline static snet_dest_t *SNetDestCopy(snet_dest_t *d)
 {
   snet_dest_t *result = SNetMemAlloc(sizeof(snet_dest_t));
-  *result = *d;
+  result->node = d->node;
+  result->dest = d->dest;
+  result->id = SNetIntListCopy(d->id);
   return result;
+}
+
+inline static void SNetDestSerialise(snet_dest_t *dest, void *buf)
+{
+  SNetDistribPack(buf, dest, sizeof(snet_dest_t));
+  SNetIntListSerialise(dest->id, buf);
+}
+
+inline static snet_dest_t *SNetDestDeserialise(void *buf)
+{
+  snet_dest_t *dest = SNetMemAlloc(sizeof(snet_dest_t));
+  SNetDistribUnpack(buf, dest, sizeof(snet_dest_t));
+  dest->id = SNetMemAlloc(sizeof(snet_id_t));
+  SNetIntListDeserialise(dest->id, buf);
+  return dest;
 }
 
 inline static bool SNetTupleCompare(snet_tuple_t t1, snet_tuple_t t2)

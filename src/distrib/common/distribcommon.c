@@ -1,6 +1,5 @@
 #include <pthread.h>
 
-#include "ast.h"
 #include "distribcommon.h"
 #include "imanager.h"
 #include "info.h"
@@ -11,30 +10,23 @@
 
 static bool running = true;
 static snet_info_tag_t prevDest;
-static snet_info_tag_t infoCounter;
 static pthread_cond_t exitCond = PTHREAD_COND_INITIALIZER;
 static pthread_mutex_t exitMutex = PTHREAD_MUTEX_INITIALIZER;
 
 void SNetDistribInit(int argc, char **argv, snet_info_t *info)
 {
-  int *counter = SNetMemAlloc(sizeof(int));
-  snet_dest_t *dest = SNetMemAlloc(sizeof(snet_dest_t));;
-
-  *counter = 0;
+  snet_dest_t *dest = SNetMemAlloc(sizeof(snet_dest_t));
 
   dest->node = 0;
-  dest->dest = *counter;
-  dest->parent = 0;
-  dest->parentNode = 0;
-  dest->dynamicIndex = 0;
-  dest->dynamicLoc = 0;
+  dest->dest = 0;
+  dest->id = SNetIntListCreate(0);
+  SNetIntListAppendStart(dest->id, 0);
 
   prevDest = SNetInfoCreateTag();
   SNetInfoSetTag(info, prevDest, (uintptr_t) dest,
                  (void* (*)(void*)) &SNetDestCopy, &SNetMemFree);
 
-  infoCounter = SNetInfoCreateTag();
-  SNetInfoSetTag(info, infoCounter, (uintptr_t) counter, NULL, NULL);
+  SNetIdInit(info);
 
   SNetDistribImplementationInit(argc, argv, info);
 
@@ -64,30 +56,31 @@ void SNetDistribWaitExit(snet_info_t *info)
   pthread_mutex_lock(&exitMutex);
   while (running) pthread_cond_wait(&exitCond, &exitMutex);
   pthread_mutex_unlock(&exitMutex);
-
-  SNetMemFree((int*) SNetInfoDelTag(info, infoCounter));
 }
 
-snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in, int loc)
+snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
+     int location, snet_locvec_t *locvec)
 {
-  int *counter = (int*) SNetInfoGetTag(info, infoCounter);
   snet_dest_t *dest = (snet_dest_t*) SNetInfoGetTag(info, prevDest);
 
-  if (dest->node != loc) {
-    dest->dest = (*counter)++;
+  if (locvec && (dest->node != location)) {
+    dest->dest = locvec->index;
 
     if (SNetDistribIsNodeLocation(dest->node)) {
-      dest->node = loc;
-      SNetOutputManagerNewOut(*dest, in);
+      dest->node = location;
+      dest->id = SNetIntListCopy(SNetIdGet(info));
+      SNetOutputManagerNewOut(*SNetDestCopy(dest), in);
 
       in = NULL;
-    } else if (SNetDistribIsNodeLocation(loc)) {
+    } else if (SNetDistribIsNodeLocation(location)) {
       if (in == NULL) in = SNetStreamCreate(0);
 
-      SNetInputManagerNewIn(*dest, in);
-      dest->node = loc;
+      SNetInputManagerNewIn(*SNetDestCopy(dest), in);
+      dest->node = location;
+      dest->id = SNetIntListCopy(SNetIdGet(info));
     } else {
-      dest->node = loc;
+      dest->node = location;
+      dest->id = SNetIntListCopy(SNetIdGet(info));
     }
   }
 
@@ -96,49 +89,26 @@ snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in, int loc)
 
 void SNetRouteNewDynamic(snet_dest_t dest)
 {
-  snet_ast_t *ast = NULL; //FIXME
-  snet_stream_t *stream;
+  snet_stream_t *stream = NULL;
+  int location = -1;
+  snet_ast_t *ast =  SNetASTLookup(dest.dest);
+  snet_ast_t *ast_parent = SNetASTLookup(ast->locvec.parent->index);
+
+  if (ast_parent->locvec.type != LOC_SPLIT) {
+    location = dest.node;
+    ast = ast_parent;
+  } else if (ast_parent->split.loc) { //location split
+    location = SNetIntListGet(dest.id, 0);
+  }
 
   snet_info_t *info = SNetInfoInit();
+  SNetIdInit(info);
   SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(&dest),
                 (void* (*)(void*)) &SNetDestCopy, &SNetMemFree);
+  SNetIdSet(info, SNetIntListCopy(dest.id));
 
-  SNetRouteDynamicEnter(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
-  stream = SNetInstantiate(ast, NULL, info);
-  SNetRouteUpdate(info, stream, dest.parentNode);
-  SNetRouteDynamicExit(info, dest.dynamicIndex, dest.dynamicLoc, NULL);
-
+  stream = SNetInstantiatePlacement(ast, NULL, info, location);
+  SNetRouteUpdate(info, stream, dest.node, &ast->locvec);
   SNetInfoDestroy(info);
 }
 
-void SNetRouteDynamicEnter(snet_info_t *info, int dynamicIndex, int dynamicLoc,
-                           snet_startup_fun_t fun)
-{
-  snet_dest_t *dest = (snet_dest_t*) SNetInfoGetTag(info, prevDest);
-  dest->dynamicIndex = dynamicIndex;
-
-  int *counter = SNetMemAlloc(sizeof(int));
-  *counter = 0;
-  SNetInfoSetTag(info, infoCounter, (uintptr_t) counter, NULL, NULL);
-
-  if (fun != NULL) {
-    dest->parent = SNetNetToId(fun);
-    dest->parentNode = SNetDistribGetNodeId();
-    dest->dynamicLoc = dynamicLoc;
-  }
-
-  return;
-}
-
-void SNetRouteDynamicExit(snet_info_t *info, int dynamicIndex, int dynamicLoc,
-                           snet_startup_fun_t fun)
-{
-  int *counter = (int*) SNetInfoDelTag(info, infoCounter);
-  (void) dynamicIndex; /* NOT USED */
-  (void) dynamicLoc; /* NOT USED */
-  (void) fun; /* NOT USED */
-
-  SNetMemFree(counter);
-  SNetInfoSetTag(info, infoCounter, (uintptr_t) NULL, NULL, NULL);
-  return;
-}
