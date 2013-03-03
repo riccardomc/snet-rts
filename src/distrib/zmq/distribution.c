@@ -373,7 +373,7 @@ snet_msg_t SNetDistribRecvMsg(void)
       result.rec = SNetRecDeserialise(&payload_f);
     case snet_block:
     case snet_unblock:
-      SNetDistribUnpack(&payload_f, &result.dest, sizeof(snet_dest_t));
+      result.dest = *SNetDestDeserialise(&payload_f);
       SNetDistribUnpack(&source_f, &result.dest.node, sizeof(int));
       break;
     case snet_ref_set:
