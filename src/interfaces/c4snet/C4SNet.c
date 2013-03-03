@@ -72,6 +72,11 @@ static void SCCPackFun(c4snet_data_t *cdata, void *dest);
 static void *SCCUnpackFun(void *localBuf);
 #endif
 
+#ifdef ENABLE_DIST_ZMQ
+static void ZMQPackFun(c4snet_data_t *data, void *buf);
+static c4snet_data_t *ZMQUnpackFun(void *buf);
+#endif
+
 /***************************** Auxiliary functions ****************************/
 
 static int sizeOfType(c4snet_type_t type)
@@ -309,7 +314,13 @@ void C4SNetInit( int id, snet_distrib_t distImpl)
       #endif
       break;
     case zmq:
-      //TODO: Implement PackFuncs and other...
+      #ifdef ENABLE_DIST_ZMQ
+        packfun = (void (*)(void*, void*)) &ZMQPackFun;
+        unpackfun = (void *(*)(void*)) &ZMQUnpackFun;
+      #else
+        SNetUtilDebugFatal("C4SNet supports ZMQ, but is not configured to use "
+                           "it.\n");
+      #endif
       break;
     default:
       SNetUtilDebugFatal("C4SNet doesn't support the selected distribution "
@@ -500,3 +511,42 @@ static void *SCCUnpackFun(void *buf)
   return result;
 }
 #endif
+
+#ifdef ENABLE_DIST_ZMQ
+static void ZMQPackFun(c4snet_data_t *data, void *buf)
+{
+  SNetDistribPack(buf, &data->vtype, sizeof(c4snet_vtype_t));
+  SNetDistribPack(buf, &data->size, sizeof(size_t));
+  SNetDistribPack(buf, &data->type, sizeof(c4snet_type_t));
+
+  if (data->vtype == VTYPE_array) {
+    SNetDistribPack(buf, data->data.ptr, AllocatedSpace(data));
+  } else {
+    SNetDistribPack(buf, &data->data, sizeOfType(data->type));
+  }
+}
+
+static c4snet_data_t *ZMQUnpackFun(void *buf)
+{
+  void *tmp;
+  c4snet_data_t *result;
+  c4snet_vtype_t vtype;
+  c4snet_type_t type;
+  size_t count;
+
+  SNetDistribUnpack(buf, &vtype, sizeof(c4snet_vtype_t));
+  SNetDistribUnpack(buf, &count, sizeof(size_t));
+  SNetDistribUnpack(buf, &type, sizeof(c4snet_type_t));
+
+  if (vtype == VTYPE_array) {
+    result = C4SNetAlloc(type, count, &tmp);
+    SNetDistribUnpack(buf, tmp, AllocatedSpace(result));
+  } else {
+    result = C4SNetAlloc(type, 1, &tmp);
+    SNetDistribUnpack(buf, tmp, sizeOfType(result->type));
+  }
+
+  return result;
+}
+#endif
+

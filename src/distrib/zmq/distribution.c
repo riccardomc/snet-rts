@@ -379,7 +379,7 @@ snet_msg_t SNetDistribRecvMsg(void)
       break;
     case snet_ref_set:
       result.ref = SNetRefDeserialise(&payload_f);
-      result.data = (uintptr_t) SNetInterfaceGet(SNetRefInterface(result.ref))->unpackfun(zframe_data(payload_f));
+      result.data = (uintptr_t) SNetInterfaceGet(SNetRefInterface(result.ref))->unpackfun(&payload_f);
       break;
     case snet_ref_fetch:
       result.ref = SNetRefDeserialise(&payload_f);
@@ -434,10 +434,8 @@ void SNetDistribUpdateBlocked(void)
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
 {
   zframe_t *payload = NULL;
-  char data_buf[4096];
   SNetRefSerialise(ref, &payload);
-  SNetInterfaceGet(SNetRefInterface(ref))->packfun(data, &data_buf);
-  SNetDistribPack(&payload, &dest, sizeof(data_buf)); //FIXME: I don't know actual data size!
+  SNetInterfaceGet(SNetRefInterface(ref))->packfun(data, &payload);
   SNetDistribZMQSend(payload, snet_ref_set, (uintptr_t) dest);
 }
 
