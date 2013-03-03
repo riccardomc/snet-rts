@@ -48,7 +48,7 @@ snet_ast_t *SNetSerial(int location,
   result->serial.box_a->locvec.num = 1;
   result->serial.box_a->locvec.parent = &result->locvec;
   result->serial.box_b = box_b(location);
-  result->serial.box_a->locvec.num = 2;
-  result->serial.box_a->locvec.parent = &result->locvec;
+  result->serial.box_b->locvec.num = 2;
+  result->serial.box_b->locvec.parent = &result->locvec;
   return result;
 }
