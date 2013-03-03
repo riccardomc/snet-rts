@@ -17,6 +17,14 @@ if test x$enable_dist_scc = xyes; then
 fi
 AM_CONDITIONAL([ENABLE_DIST_SCC], [test x$enable_dist_scc = xyes])
 
+AC_ARG_ENABLE([dist-zmq], [AS_HELP_STRING([--enable-dist-zmq],
+    [Enable the ZeroMQ based distribution layer (default is disabled)])],
+    [], [enable_dist_zmq=no])
+if test x$enable_dist_zmq = xyes; then
+  AC_DEFINE([ENABLE_DIST_ZMQ], [1], [Set to 1 to enable the ZeroMQ based distribution layer])
+fi
+AM_CONDITIONAL([ENABLE_DIST_ZMQ], [test x$enable_dist_zmq = xyes])
+
 dnl If --enable-dist-mpi=auto is used, try to find MPI, but use standard C compiler if it is not found.
 dnl If --enable-dist-mpi=yes is used, try to find MPI and fail if it isn't found.
 dnl If --enable-dist-mpi=no is used, use a standard C compiler instead.

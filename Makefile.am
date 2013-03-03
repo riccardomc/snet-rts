@@ -221,6 +221,7 @@ libdistribscc_la_CPPFLAGS = \
 	-I$(srcdir)/../../../scc-hg/rcce/include
 endif
 
+if ENABLE_DIST_ZMQ
 pkglib_LTLIBRARIES += libdistribzmq.la
 libdistribzmq_la_SOURCES = \
 	src/distrib/common/tuplelist.c \
@@ -239,8 +240,8 @@ libdistribzmq_la_SOURCES = \
 libdistribzmq_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/zmq \
-	-I$(srcdir)/src/distrib/common \
-	-I/opt/local/include 
+	-I$(srcdir)/src/distrib/common
+endif
 
 # common flags
 INCLUDES = -I$(top_srcdir)/include
