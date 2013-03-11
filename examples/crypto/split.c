@@ -12,7 +12,7 @@ void *split(void *hnd, c4snet_data_t *entries, int num_entries)
 
   char *data, *hash, *salt, *first, *middle, *last;
 
-  first = data = C4SNetGetData(entries)
+  first = data = C4SNetGetData(entries);
 
   for (int i = 0; i < num_entries; i++) {
     last = strchr(first, '\n');
