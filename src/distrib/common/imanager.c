@@ -158,7 +158,9 @@ static void HandleRecord(snet_dest_stream_map_t *destMap, snet_record_t *rec,
 {
   snet_buffer_t *buf;
   snet_stream_desc_t *sd;
-
+#ifdef SNET_DISTRIB_DEBUG
+  SNetDestDump(dest, "HR");
+#endif
   UpdateIncoming(destMap);
   if (!SNetDestStreamMapContains(destMap, dest)) {
     SNetRouteNewDynamic(dest);

@@ -181,7 +181,9 @@ snet_stream_t *SNetInstantiatePlacement(snet_ast_t *tree, snet_stream_t *input,
 {
   location = location >= 0 ? location :
                 tree->location >= 0 ? tree->location : SNetDistribGetNodeId();
-
+#ifdef SNET_AST_DEBUG
+  printf("Inst %d:%c @ %d\n", tree->locvec.index, tree->locvec.type, location);
+#endif
   snet_stream_t *output = NULL;
   switch (tree->type) {
       case snet_box:
@@ -301,6 +303,9 @@ snet_ast_t *SNetASTLookup(int index)
 
 int SNetASTRegister(snet_ast_t *tree)
 {
+#ifdef SNET_AST_DEBUG
+  printf("Reg %d:%c @ %d\n", AST_index, tree->locvec.type, tree->location);
+#endif
   SNetAstMapSet(AST_map, AST_index, tree);
   return AST_index++;
 }
