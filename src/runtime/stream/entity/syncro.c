@@ -313,8 +313,8 @@ snet_stream_t *SNetSyncInst( snet_stream_t *input,
     SNetThreadingSpawn( ENTITY_sync, location, SNetNameCreate(locvec, SNetIdGet(info),
           "<sync>"), &SyncBoxTask, sarg);
   } else {
-    SNetVariantListDestroy( patterns);
-    SNetExprListDestroy( guard_exprs);
+    //SNetVariantListDestroy( patterns);
+    //SNetExprListDestroy( guard_exprs);
     output = input;
   }
 
