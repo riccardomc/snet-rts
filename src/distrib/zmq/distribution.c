@@ -123,14 +123,15 @@ void  SNetDistribZMQUnpack(zframe_t **srcframe, void *dst, size_t count)
       dst = NULL;
     } else {
       memcpy(dst, srcframe_data, dst_size);
-
-      //FIXME: SNetMemAlloc returns null when arg is 0!
-      byte *newdst = malloc(srcframe_size - dst_size);
-
-      memcpy(newdst, srcframe_data + count, srcframe_size - dst_size);
-      zframe_reset(*srcframe, newdst, srcframe_size - dst_size);
-
-      SNetMemFree(newdst);
+      if ((srcframe_size - dst_size) != 0) {
+        byte *newdst = SNetMemAlloc(srcframe_size - dst_size);
+        memcpy(newdst, srcframe_data + count, srcframe_size - dst_size);
+        zframe_reset(*srcframe, newdst, srcframe_size - dst_size);
+        SNetMemFree(newdst);
+      } else {
+        zframe_destroy(srcframe);
+        *srcframe = NULL;
+      }
     }
 
   } else {
