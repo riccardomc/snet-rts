@@ -70,11 +70,10 @@ static snet_stream_t *SNetSerialStarchild(snet_stream_t *input,
   snet_stream_t *internal_stream;
   snet_stream_t *output;
 
-  int i = SNetIdTop(info);
-
   /* create operand A */
+  SNetRouteDynamicEnter(info, box_a->locvec.index, box_a->location);
   internal_stream = SNetInstantiate(box_a, input, info);
-  internal_stream = SNetRouteUpdate(info, internal_stream, location, &box_a->locvec);
+  internal_stream = SNetRouteUpdate(info, internal_stream, location, box_a->locvec.index);
 
   /* create operand B */
   output = SNetInstantiate(box_b, internal_stream, info);
@@ -353,8 +352,9 @@ static snet_stream_t *CreateStar( snet_stream_t *input,
   star_arg_t *sarg;
   snet_stream_t *newstream;
 
-  input = SNetRouteUpdate(info, input, location, locvec);
+  input = SNetRouteUpdate(info, input, location, locvec->index);
   if(SNetDistribIsNodeLocation(location)) {
+
     /* create the task argument */
     sarg = SNetMemAlloc( sizeof(star_arg_t));
     newstream = SNetStreamCreate(0);

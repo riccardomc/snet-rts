@@ -77,11 +77,13 @@ static void SplitBoxTask(void *arg)
           SNetIdAppend(info, i);
 
           if( sarg->is_byloc) {
+            SNetRouteDynamicEnter(info, sarg->box->locvec.index, i);
             temp_stream = SNetInstantiatePlacement(sarg->box, newstream_addr, info, i);
-            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, &sarg->box->locvec);
+            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, sarg->box->locvec.index);
           } else {
-            temp_stream = SNetInstantiate(sarg->box, newstream_addr, info);
-            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, &sarg->box->locvec);
+            SNetRouteDynamicEnter(info, sarg->box->locvec.index, sarg->box->location); 
+            temp_stream = SNetInstantiatePlacement(sarg->box, newstream_addr, info, sarg->box->location);
+            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, sarg->box->locvec.index);
           }
 
           /* destroy info and location vector */
@@ -217,7 +219,7 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
   snet_stream_t *initial, *output;
   split_arg_t *sarg;
 
-  input = SNetRouteUpdate(info, input, location, locvec);
+  input = SNetRouteUpdate(info, input, location, locvec->index);
   if(SNetDistribIsNodeLocation(location)) {
     initial = SNetStreamCreate(0);
 

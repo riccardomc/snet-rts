@@ -265,7 +265,7 @@ int SNetInRun(int argc, char **argv,
   snet_ast_t *ast = SNetASTInit(fun, 0);
   input_stream = SNetStreamCreate(0);
   output_stream = SNetInstantiate(ast, input_stream, info);
-  output_stream = SNetRouteUpdate(info, output_stream, 0, &ast->locvec);
+  output_stream = SNetRouteUpdate(info, output_stream, 0, ast->locvec.index);
 
   SNetDistribStart();
 

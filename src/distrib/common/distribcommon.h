@@ -20,6 +20,9 @@ typedef enum {
 typedef struct  {
   int node;
   int dest;
+  int dynamicParent;
+  int dynamicNode;
+  int dynamicLoc;
   snet_id_t *id;
 } snet_dest_t;
 
@@ -41,7 +44,8 @@ typedef struct {
 
 inline static void SNetDestDump(snet_dest_t dest, char *prefix)
 {
-  printf("%s: %d %d ", prefix, dest.node, dest.dest);
+  printf("%s: %d %d %d %d %d ", prefix, dest.node,
+      dest.dest, dest.dynamicParent, dest.dynamicNode, dest.dynamicLoc);
   SNetIdDumpAux(dest.id);
   printf("\n");
 }
@@ -51,6 +55,9 @@ inline static bool SNetDestCompare(snet_dest_t d1, snet_dest_t d2)
 
   bool res = d1.node == d2.node &&
     d1.dest == d2.dest &&
+    d1.dynamicParent == d2.dynamicParent &&
+    d1.dynamicNode == d2.dynamicNode &&
+    d1.dynamicLoc == d2.dynamicLoc &&
     SNetIdCompare(d1.id, d2.id);
 
   return res;
@@ -61,6 +68,9 @@ inline static snet_dest_t *SNetDestCopy(snet_dest_t *d)
   snet_dest_t *result = SNetMemAlloc(sizeof(snet_dest_t));
   result->node = d->node;
   result->dest = d->dest;
+  result->dynamicParent = d->dynamicParent;
+  result->dynamicNode = d->dynamicNode;
+  result->dynamicLoc = d->dynamicLoc;
   result->id = SNetIntListCopy(d->id);
   return result;
 }
@@ -78,6 +88,27 @@ inline static snet_dest_t *SNetDestDeserialise(void *buf)
   dest->id = SNetMemAlloc(sizeof(snet_id_t));
   SNetIntListDeserialise(dest->id, buf);
   return dest;
+}
+
+inline static snet_dest_t *SNetDestCreate()
+{
+  snet_dest_t *dest = SNetMemAlloc(sizeof(snet_dest_t));
+
+  dest->node = 0;
+  dest->dest = 0;
+  dest->dynamicParent = 0;
+  dest->dynamicNode = 0;
+  dest->dynamicLoc = 0;
+  dest->id = SNetIntListCreate(0);
+  SNetIntListAppendStart(dest->id, 0);
+
+  return dest;
+}
+
+inline static void SNetDestDestroy(snet_dest_t *dest)
+{
+  SNetIntListDestroy(dest->id);
+  SNetMemFree(dest);
 }
 
 inline static bool SNetTupleCompare(snet_tuple_t t1, snet_tuple_t t2)

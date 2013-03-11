@@ -19,8 +19,9 @@ void SNetDistribStop(void);
 void SNetDistribWaitExit(snet_info_t *info);
 
 snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
-                              int location, snet_locvec_t *locvec);
+                              int location, int index);
 
+void SNetRouteDynamicEnter(snet_info_t *info, int dynamicIdx, int dynamicLoc);
 snet_ref_t *SNetRefCreate(void *data, int interface);
 snet_ref_t *SNetRefCopy(snet_ref_t *ref);
 void *SNetRefGetData(snet_ref_t *ref);

@@ -46,14 +46,22 @@ bool SNetDistribIsNodeLocation(int location)
 
 bool SNetDistribIsRootNode(void) { return true; }
 
-snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *input, int loc, snet_locvec_t *locvec)
+snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *input, int loc, int index)
 {
   (void) info; /* NOT USED */
   (void) input; /* NOT USED */
   (void) loc; /* NOT USED */
-  (void) locvec; /* NOT USED */
+  (void) index; /* NOT USED */
 
   return input;
+}
+
+void SNetRouteDynamicEnter(snet_info_t *info, int dynamicParent, int dynamicLoc)
+{
+  (void) info; /* NOT USED */
+  (void) dynamicParent; /* NOT USED */
+  (void) dynamicLoc; /* NOT USED */
+
 }
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, int node) {}

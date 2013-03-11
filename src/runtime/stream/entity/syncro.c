@@ -285,7 +285,7 @@ snet_stream_t *SNetSyncInst( snet_stream_t *input,
   snet_stream_t *output;
   sync_arg_t *sarg;
 
-  input = SNetRouteUpdate(info, input, location, locvec->parent);
+  input = SNetRouteUpdate(info, input, location, locvec->index);
   if(SNetDistribIsNodeLocation(location)) {
     int i, num_patterns;
     output = SNetStreamCreate(0);

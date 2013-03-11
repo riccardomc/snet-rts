@@ -500,7 +500,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
 
   num = SNetVariantListListLength( variant_lists);
 
-  instream = SNetRouteUpdate(info, instream, location, locvec);
+  instream = SNetRouteUpdate(info, instream, location, locvec->index);
   if(SNetDistribIsNodeLocation(location)) {
     transits    = SNetMemAlloc( num * sizeof( snet_stream_t*));
     collstreams = SNetMemAlloc( num * sizeof( snet_stream_t*));
@@ -511,7 +511,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
       transits[i] = SNetStreamCreate(0);
       ast = asts[i];
       collstreams[i] = SNetInstantiate(ast, transits[i], newInfo);
-      collstreams[i] = SNetRouteUpdate(newInfo, collstreams[i], location, locvec); //FIXME does this need its own index?
+      collstreams[i] = SNetRouteUpdate(newInfo, collstreams[i], location, locvec->index); //FIXME does this need its own index?
       SNetInfoDestroy(newInfo);
     }
 
@@ -541,7 +541,7 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
       snet_info_t *newInfo = SNetInfoCopy(info);
       ast = asts[i];
       instream = SNetInstantiate(ast, instream, newInfo);
-      instream = SNetRouteUpdate(newInfo, instream, location, locvec); //FIXME See above
+      instream = SNetRouteUpdate(newInfo, instream, location, locvec->index); //FIXME See above
       SNetInfoDestroy(newInfo);
     }
 
