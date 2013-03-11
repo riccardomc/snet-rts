@@ -37,6 +37,8 @@ static int data_port;
 static int net_size;
 static char root_addr[256];
 
+static zmutex_t *send_mtx;
+
 /**
  * FIXME: These (SnetDistribZMQHosts*) will be eventually abstracted.
  */
@@ -279,7 +281,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     SNetDistribZMQConnect(sock_out[i], i, host_table->tab[i]->data_port);
 }
 
-void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
+inline static void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
 {
   int rc;
   zframe_t *source_f = NULL;
@@ -296,18 +298,25 @@ void SNetDistribZMQSend(zframe_t *payload, int type, int destination)
 
   //printf("-> Sending: %d\n", destination);
 
+  /**
+   * FIXME: This lock is necessary because the send in PUSH ZMQ sockets is
+   * non-blocking, which can lead to the interleaving of receives and sends and
+   * wrong reference counts updates.
+   */
+  zmutex_lock(send_mtx);
   rc = zmsg_send(&msg, sock_out[destination]);
+  zmutex_unlock(send_mtx);
   if (rc != 0) {
     SNetUtilDebugFatal("ZMQDistrib: Cannot send message to  %d (%s): zmsg_send (%d)",
         destination, SNetDistribZMQHostsLookup(destination), rc);
   }
-
 }
 
 void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
 {
 
   SNetDistribZMQHostsInit(argc, argv);
+  send_mtx = zmutex_new();
 
   for (int i = 0; i < argc; i++) {
     if (strcmp(argv[i], "-debugWait") == 0) {
@@ -326,13 +335,13 @@ void SNetDistribLocalStop(void)
   zctx_destroy(&context);
   SNetMemFree(sock_out);
   SNetDistribZMQHostsStop();
+  zmutex_destroy(&send_mtx);
 }
 
 void SNetDistribFetchRef(snet_ref_t *ref)
 {
   zframe_t *payload = NULL;
   SNetRefSerialise(ref, &payload);
-
   SNetDistribZMQSend(payload, snet_ref_fetch, SNetRefNode(ref));
 }
 
@@ -340,29 +349,25 @@ void SNetDistribUpdateRef(snet_ref_t *ref, int count)
 {
   zframe_t *payload = NULL;
   SNetRefSerialise(ref, &payload);
-  SNetDistribPack(&payload, &count, sizeof(int));
+  SNetDistribPack(&payload, &count, sizeof(count));
   SNetDistribZMQSend(payload, snet_ref_update, SNetRefNode(ref));
 }
 
 snet_msg_t SNetDistribRecvMsg(void)
 {
   snet_msg_t result;
-  zframe_t *source_f;
-  zframe_t *type_f;
-  zframe_t *payload_f;
+  static zframe_t *source_f;
+  static int source_v;
+  static zframe_t *type_f;
+  static zframe_t *payload_f;
 
-  zmsg_t *msg;
+  static zmsg_t *msg;
 
   msg = zmsg_recv(sock_in); //FIXME: do some proper error checking?
 
   source_f = zmsg_pop(msg);
   type_f = zmsg_pop(msg);
   payload_f = zmsg_pop(msg);
-
-  //printf("<- Recv\n");
-  //zframe_print(source_f, "S: ");
-  //zframe_print(type_f, "T: ");
-  //zframe_print(payload_f, "P: ");
 
   int type_v = -1;
   SNetDistribUnpack(&type_f, &type_v, sizeof(int));
@@ -382,7 +387,8 @@ snet_msg_t SNetDistribRecvMsg(void)
       break;
     case snet_ref_fetch:
       result.ref = SNetRefDeserialise(&payload_f);
-      SNetDistribUnpack(&source_f, &result.data, sizeof(int));
+      SNetDistribUnpack(&source_f, &source_v, sizeof(int));
+      result.data = (uintptr_t)source_v;
       break;
     case snet_ref_update:
       result.ref = SNetRefDeserialise(&payload_f);
@@ -402,7 +408,8 @@ snet_msg_t SNetDistribRecvMsg(void)
 
 void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 {
-  zframe_t *payload = NULL;
+  static zframe_t *payload;
+  payload = NULL;
   SNetRecSerialise(rec, &payload);
   SNetDestSerialise(&dest, &payload);
   SNetDistribZMQSend(payload, snet_rec, dest.node);
@@ -411,6 +418,7 @@ void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 void SNetDistribBlockDest(snet_dest_t dest)
 {
   zframe_t *payload = NULL;
+  SNetDestSerialise(&dest, &payload);
   SNetDistribZMQSend(payload, snet_block, dest.node);
 }
 
@@ -425,16 +433,19 @@ void SNetDistribUpdateBlocked(void)
 {
   char pload_v = 0;
   zframe_t *payload = NULL;
-  SNetDistribPack(&payload, &pload_v, 1);
+  SNetDistribPack(&payload, &pload_v, sizeof(pload_v));
   SNetDistribZMQSend(payload, snet_update, node_location);
 }
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
 {
-  zframe_t *payload = NULL;
+  static zframe_t *payload;
+  static uintptr_t dest_v;
+  payload = NULL;
+  dest_v = (uintptr_t)dest;
   SNetRefSerialise(ref, &payload);
   SNetInterfaceGet(SNetRefInterface(ref))->packfun(data, &payload);
-  SNetDistribZMQSend(payload, snet_ref_set, (uintptr_t) dest);
+  SNetDistribZMQSend(payload, snet_ref_set, dest_v);
 }
 
 void SNetDistribGlobalStop(void)
@@ -444,7 +455,7 @@ void SNetDistribGlobalStop(void)
 
   for (i--; i >= 0; i--) {
     zframe_t *payload = NULL;
-    SNetDistribPack(&payload, &pload_v, 1);
+    SNetDistribPack(&payload, &pload_v, sizeof(pload_v));
 
     SNetDistribZMQSend(payload, snet_stop, i);
   }
