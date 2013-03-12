@@ -60,7 +60,7 @@ snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
 {
   snet_dest_t *dest = (snet_dest_t*) SNetInfoGetTag(info, prevDest);
 #ifdef SNET_DISTRIB_DEBUG
-  SNetDestDump(*dest, "RU");
+  SNetDestDump(dest, "RU");
 #endif
 
   if (dest->node != location) {
@@ -70,24 +70,24 @@ snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
       dest->node = location;
       SNetIntListDestroy(dest->id);
       dest->id = SNetIntListCopy(SNetIdGet(info));
-      SNetOutputManagerNewOut(*SNetDestCopy(dest), in); //FIXME Dest copy memory
+      SNetOutputManagerNewOut(SNetDestCopy(dest), in); //FIXME Dest copy memory
 #ifdef SNET_DISTRIB_DEBUG
-      SNetDestDump(*dest, "New Out");
+      SNetDestDump(dest, "New Out");
 #endif
       in = NULL;
     } else if (SNetDistribIsNodeLocation(location)) {
       if (in == NULL) in = SNetStreamCreate(0);
 
 #ifdef SNET_DISTRIB_DEBUG
-      SNetDestDump(*dest, "New In");
+      SNetDestDump(dest, "New In");
 #endif
-      SNetInputManagerNewIn(*SNetDestCopy(dest), in); //FIXME
+      SNetInputManagerNewIn(SNetDestCopy(dest), in); //FIXME
       dest->node = location;
       SNetIntListDestroy(dest->id);
       dest->id = SNetIntListCopy(SNetIdGet(info));
     } else {
 #ifdef SNET_DISTRIB_DEBUG
-      SNetDestDump(*dest, "Don't care");
+      SNetDestDump(dest, "Don't care");
 #endif
       dest->node = location;
       SNetIntListDestroy(dest->id);
@@ -98,21 +98,21 @@ snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
   return in;
 }
 
-void SNetRouteNewDynamic(snet_dest_t dest)
+void SNetRouteNewDynamic(snet_dest_t *dest)
 {
   snet_stream_t *stream = NULL;
-  snet_ast_t *ast = SNetASTLookup(dest.dynamicParent);
+  snet_ast_t *ast = SNetASTLookup(dest->dynamicParent);
 #ifdef SNET_DISTRIB_DEBUG
   SNetDestDump(dest, "ND");
 #endif
   snet_info_t *info = SNetInfoInit();
-  SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(&dest),
+  SNetInfoSetTag(info, prevDest, (uintptr_t) SNetDestCopy(dest),
                 (void* (*)(void*)) &SNetDestCopy,
                 (void (*)(void*)) &SNetDestDestroy);
-  SNetIdSet(info, SNetIntListCopy(dest.id));
+  SNetIdSet(info, SNetIntListCopy(dest->id));
 
-  stream = SNetInstantiatePlacement(ast, NULL, info, dest.dynamicLoc);
-  SNetRouteUpdate(info, stream, dest.dynamicNode, ast->locvec.index);
+  stream = SNetInstantiatePlacement(ast, NULL, info, dest->dynamicLoc);
+  SNetRouteUpdate(info, stream, dest->dynamicNode, ast->locvec.index);
   SNetInfoDestroy(info);
 }
 

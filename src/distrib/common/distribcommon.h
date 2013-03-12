@@ -27,7 +27,7 @@ typedef struct  {
 } snet_dest_t;
 
 typedef struct {
-  snet_dest_t dest;
+  snet_dest_t *dest;
   snet_stream_t *stream;
 } snet_tuple_t;
 
@@ -36,29 +36,29 @@ typedef struct {
 typedef struct {
   snet_comm_type_t type;
   snet_record_t *rec;
-  snet_dest_t dest;
+  snet_dest_t *dest;
   snet_ref_t *ref;
   uintptr_t data;
   int val;
 } snet_msg_t;
 
-inline static void SNetDestDump(snet_dest_t dest, char *prefix)
+inline static void SNetDestDump(snet_dest_t *dest, char *prefix)
 {
-  printf("%s: %d %d %d %d %d ", prefix, dest.node,
-      dest.dest, dest.dynamicParent, dest.dynamicNode, dest.dynamicLoc);
-  SNetIdDumpAux(dest.id);
+  printf("%s: %d %d %d %d %d ", prefix, dest->node,
+      dest->dest, dest->dynamicParent, dest->dynamicNode, dest->dynamicLoc);
+  SNetIdDumpAux(dest->id);
   printf("\n");
 }
 
-inline static bool SNetDestCompare(snet_dest_t d1, snet_dest_t d2)
+inline static bool SNetDestCompare(snet_dest_t *d1, snet_dest_t *d2)
 {
 
-  bool res = d1.node == d2.node &&
-    d1.dest == d2.dest &&
-    d1.dynamicParent == d2.dynamicParent &&
-    d1.dynamicNode == d2.dynamicNode &&
-    d1.dynamicLoc == d2.dynamicLoc &&
-    SNetIdCompare(d1.id, d2.id);
+  bool res = d1->node == d2->node &&
+    d1->dest == d2->dest &&
+    d1->dynamicParent == d2->dynamicParent &&
+    d1->dynamicNode == d2->dynamicNode &&
+    d1->dynamicLoc == d2->dynamicLoc &&
+    SNetIdCompare(d1->id, d2->id);
 
   return res;
 }
@@ -123,10 +123,10 @@ void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info);
 void SNetDistribLocalStop(void);
 
 snet_msg_t SNetDistribRecvMsg(void);
-void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec);
+void SNetDistribSendRecord(snet_dest_t *dest, snet_record_t *rec);
 
-void SNetDistribBlockDest(snet_dest_t dest);
-void SNetDistribUnblockDest(snet_dest_t dest);
+void SNetDistribBlockDest(snet_dest_t *dest);
+void SNetDistribUnblockDest(snet_dest_t *dest);
 
 void SNetDistribUpdateBlocked(void);
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest);

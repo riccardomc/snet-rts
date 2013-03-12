@@ -11,7 +11,7 @@
 #define MAP_NAME_H StreamDest
 #define MAP_TYPE_NAME_H stream_dest
 #define MAP_KEY_H snet_stream_desc_t*
-#define MAP_VAL_H snet_dest_t
+#define MAP_VAL_H snet_dest_t*
 #include "map-template.h"
 #undef MAP_VAL_H
 #undef MAP_KEY_H
@@ -20,7 +20,7 @@
 
 #define LIST_NAME_H Dest
 #define LIST_TYPE_NAME_H dest
-#define LIST_VAL_H snet_dest_t
+#define LIST_VAL_H snet_dest_t*
 #include "list-template.h"
 #undef LIST_VAL_H
 #undef LIST_TYPE_NAME_H
@@ -29,10 +29,12 @@
 #define MAP_NAME StreamDest
 #define MAP_TYPE_NAME stream_dest
 #define MAP_KEY snet_stream_desc_t*
-#define MAP_VAL snet_dest_t
+#define MAP_VAL snet_dest_t*
 #define MAP_VAL_CMP SNetDestCompare
+#define MAP_VAL_FREE_FUN SNetDestDestroy
 #include "map-template.c"
 #undef MAP_VAL_CMP
+#undef MAP_VAL_FREE_FUN 
 #undef MAP_VAL
 #undef MAP_KEY
 #undef MAP_TYPE_NAME
@@ -40,10 +42,12 @@
 
 #define LIST_NAME Dest
 #define LIST_TYPE_NAME dest
-#define LIST_VAL snet_dest_t
+#define LIST_VAL snet_dest_t*
 #define LIST_CMP SNetDestCompare
+#define LIST_FREE_FUNCTION SNetDestDestroy
 #include "list-template.c"
 #undef LIST_CMP
+#undef LIST_FREE_FUNCTION  
 #undef LIST_VAL
 #undef LIST_TYPE_NAME
 #undef LIST_NAME
@@ -55,7 +59,7 @@ static snet_dest_list_t *newBlocked = NULL;
 static snet_dest_list_t *newUnblocked = NULL;
 static pthread_mutex_t outputManagerMutex = PTHREAD_MUTEX_INITIALIZER;
 
-void SNetOutputManagerNewOut(snet_dest_t dest, snet_stream_t *stream)
+void SNetOutputManagerNewOut(snet_dest_t *dest, snet_stream_t *stream)
 {
   snet_tuple_t tuple = {dest, stream};
 
@@ -71,7 +75,7 @@ void SNetOutputManagerNewOut(snet_dest_t dest, snet_stream_t *stream)
   pthread_mutex_unlock(&outputManagerMutex);
 }
 
-static void UpdateState(snet_dest_t dest, bool block)
+static void UpdateState(snet_dest_t *dest, bool block)
 {
   pthread_mutex_lock(&outputManagerMutex);
   SNetDestListAppendEnd(block ? newBlocked : newUnblocked, dest);
@@ -81,8 +85,13 @@ static void UpdateState(snet_dest_t dest, bool block)
   pthread_mutex_unlock(&outputManagerMutex);
 }
 
-void SNetOutputManagerBlock(snet_dest_t dest) { UpdateState(dest, true); }
-void SNetOutputManagerUnblock(snet_dest_t dest) { UpdateState(dest, false); }
+void SNetOutputManagerBlock(snet_dest_t *dest) { 
+  UpdateState(SNetDestCopy(dest), true);
+}
+
+void SNetOutputManagerUnblock(snet_dest_t *dest) { 
+  UpdateState(SNetDestCopy(dest), false);
+}
 
 static void UpdateOutgoing(snet_stream_dest_map_t *map, snet_streamset_t *set)
 {
@@ -101,7 +110,7 @@ static void UpdateOutgoing(snet_stream_dest_map_t *map, snet_streamset_t *set)
 static void UpdateBlocked(snet_stream_dest_map_t *map, snet_dest_list_t *list,
                           snet_streamset_t *oldSet, snet_streamset_t *newSet)
 {
-  snet_dest_t dest;
+  snet_dest_t *dest;
   snet_stream_desc_t *sd;
 
   pthread_mutex_lock(&outputManagerMutex);
@@ -154,7 +163,7 @@ void SNetOutputManager(void *args)
 
   UpdateOutgoing(streamMap, &waiting);
   while (running) {
-    snet_dest_t dest;
+    snet_dest_t *dest;
     snet_record_t *rec;
     snet_stream_desc_t *sd = SNetStreamPoll(&waiting);
 

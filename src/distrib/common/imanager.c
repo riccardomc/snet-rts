@@ -12,7 +12,7 @@
 
 #define MAP_NAME_H DestStream
 #define MAP_TYPE_NAME_H dest_stream
-#define MAP_KEY_H snet_dest_t
+#define MAP_KEY_H snet_dest_t*
 #define MAP_VAL_H snet_stream_desc_t*
 #include "map-template.h"
 #undef MAP_VAL_H
@@ -38,9 +38,10 @@
 
 #define MAP_NAME DestStream
 #define MAP_TYPE_NAME dest_stream
-#define MAP_KEY snet_dest_t
+#define MAP_KEY snet_dest_t*
 #define MAP_VAL snet_stream_desc_t*
 #define MAP_KEY_CMP SNetDestCompare
+#define MAP_KEY_FREE_FUN SNetDestDestroy
 #include "map-template.c"
 #undef MAP_KEY_FREE_FUN
 #undef MAP_KEY_CMP
@@ -66,13 +67,13 @@
 #undef LIST_NAME
 
 
-void SNetRouteNewDynamic(snet_dest_t dest);
+void SNetRouteNewDynamic(snet_dest_t *dest);
 
 struct snet_buffer {
   bool done;
   unsigned int counter;
   pthread_mutex_t mutex;
-  snet_dest_t dest;
+  snet_dest_t *dest;
   snet_record_list_t *list;
   snet_stream_desc_t *sd;
 };
@@ -154,7 +155,7 @@ static void UpdateIncoming(snet_dest_stream_map_t *destMap)
 }
 
 static void HandleRecord(snet_dest_stream_map_t *destMap, snet_record_t *rec,
-                         snet_dest_t dest)
+                         snet_dest_t *dest)
 {
   snet_buffer_t *buf;
   snet_stream_desc_t *sd;
@@ -190,7 +191,7 @@ static void HandleRecord(snet_dest_stream_map_t *destMap, snet_record_t *rec,
 
 void SNetInputManager( void *args);
 
-void SNetInputManagerNewIn(snet_dest_t dest, snet_stream_t *stream)
+void SNetInputManagerNewIn(snet_dest_t *dest, snet_stream_t *stream)
 {
   snet_tuple_t tuple = {dest, stream};
   pthread_mutex_lock(&newStreamsMutex);
@@ -220,6 +221,7 @@ void SNetInputManager(void *args)
     switch (msg.type) {
       case snet_rec:
         HandleRecord(destMap, msg.rec, msg.dest);
+        SNetDestDestroy(msg.dest);
         break;
 
       case snet_update:
@@ -228,10 +230,12 @@ void SNetInputManager(void *args)
 
       case snet_block:
         SNetOutputManagerBlock(msg.dest);
+        SNetDestDestroy(msg.dest);
         break;
 
       case snet_unblock:
         SNetOutputManagerUnblock(msg.dest);
+        SNetDestDestroy(msg.dest);
         break;
 
       case snet_ref_set:
