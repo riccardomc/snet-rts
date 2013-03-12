@@ -38,7 +38,8 @@ htab_t *htab_alloc(size_t size)
   return table;
 }
 
-void htab_host_free(htab_host_t *host) {
+void htab_host_free(htab_host_t *host)
+{
   free(host->host);
   free(host->bind);
   free(host);
@@ -159,7 +160,9 @@ htab_t *htab_unpack(void *buf,
   table = htab_alloc(size);
 
   for (i = 0; i < size; i++) {
+    htab_host_t *tmp = table->tab[i];
     table->tab[i] = htab_host_unpack(buf, unpackFun);
+    htab_host_free(tmp);
   }
 
   return table;

@@ -109,6 +109,7 @@ inline static void SNetDestDestroy(snet_dest_t *dest)
 {
   SNetIntListDestroy(dest->id);
   SNetMemFree(dest);
+  dest = NULL;
 }
 
 inline static bool SNetTupleCompare(snet_tuple_t t1, snet_tuple_t t2)

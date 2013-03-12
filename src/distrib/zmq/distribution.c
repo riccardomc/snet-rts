@@ -334,7 +334,6 @@ void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
 void SNetDistribLocalStop(void)
 {
   zctx_destroy(&context);
-  SNetMemFree(sock_out);
   SNetDistribZMQHostsStop();
   zmutex_destroy(&send_mtx);
 }
