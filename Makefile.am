@@ -91,7 +91,6 @@ libruntimestream_la_SOURCES = \
 	src/runtime/stream/shared/handle_p.h \
 	src/runtime/stream/entity/alias.c \
 	src/runtime/stream/entity/ast.c \
-	src/runtime/stream/entity/ast.h \
 	src/runtime/stream/entity/box.c \
 	src/runtime/stream/entity/collector.c \
 	src/runtime/stream/entity/collector.h \
