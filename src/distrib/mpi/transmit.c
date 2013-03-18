@@ -47,8 +47,8 @@ snet_msg_t SNetDistribRecvMsg(void)
         result.rec = SNetRecDeserialise(&recvBuf);
     case snet_block:
     case snet_unblock:
-      SNetDistribUnpack(&recvBuf, &result.dest, sizeof(snet_dest_t));
-      result.dest.node = status.MPI_SOURCE;
+      result.dest = SNetDestDeserialise(&recvBuf);
+      result.dest->node = status.MPI_SOURCE;
       break;
     case snet_ref_set:
       result.ref = SNetRefDeserialise(&recvBuf);
@@ -69,14 +69,14 @@ snet_msg_t SNetDistribRecvMsg(void)
   return result;
 }
 
-void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
+void SNetDistribSendRecord(snet_dest_t *dest, snet_record_t *rec)
 {
   static mpi_buf_t sendBuf = {0, 0, NULL};
 
   sendBuf.offset = 0;
   SNetRecSerialise(rec, &sendBuf);
-  SNetDistribPack(&sendBuf, &dest, sizeof(snet_dest_t));
-  MPISendBuf(&sendBuf, dest.node, snet_rec);
+  SNetDestSerialise(dest, &sendBuf);
+  MPISendBuf(&sendBuf, dest->node, snet_rec);
 }
 
 void SNetDistribFetchRef(snet_ref_t *ref)
@@ -99,11 +99,19 @@ void SNetDistribUpdateRef(snet_ref_t *ref, int count)
 void SNetDistribUpdateBlocked(void)
 { MPISend(NULL, 0, node_location, snet_update); }
 
-void SNetDistribUnblockDest(snet_dest_t dest)
-{ MPISend(&dest, sizeof(snet_dest_t), dest.node, snet_unblock); }
+void SNetDistribUnblockDest(snet_dest_t *dest)
+{
+  mpi_buf_t buf = {0, 0, NULL};
+  SNetDestSerialise(dest, &buf);
+  MPISendBuf(&buf, dest->node, snet_unblock);
+}
 
-void SNetDistribBlockDest(snet_dest_t dest)
-{ MPISend(&dest, sizeof(snet_dest_t), dest.node, snet_block); }
+void SNetDistribBlockDest(snet_dest_t *dest)
+{
+  mpi_buf_t buf = {0, 0, NULL};
+  SNetDestSerialise(dest, &buf);
+  MPISendBuf(&buf, dest->node, snet_block);
+}
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
 {
