@@ -35,6 +35,10 @@
 #include "threading.h"
 #include "distribution.h"
 
+#ifdef SNET_DBG_TIMING
+#include <time.h>
+#endif
+
 static FILE *SNetInOpenFile(const char *file, const char *args)
 {
   FILE *fileptr = fopen(file, args);
@@ -267,6 +271,9 @@ int SNetInRun(int argc, char **argv,
   output_stream = SNetInstantiate(ast, input_stream, info);
   output_stream = SNetRouteUpdate(info, output_stream, 0, ast->locvec.index);
 
+#ifdef SNET_DBG_TIMING
+  clock_t b = clock();
+#endif
   SNetDistribStart();
 
   if (SNetDistribIsRootNode()) {
@@ -278,6 +285,17 @@ int SNetInRun(int argc, char **argv,
   }
 
   SNetDistribWaitExit(info);
+#ifdef SNET_DBG_TIMING
+  clock_t e = clock();
+  double time = (double)(e - b) / CLOCKS_PER_SEC;
+  FILE *f = stdout;
+  char *fname = getenv("SNET_DBG_TIMING");
+  if (fname) {
+    f = fopen(fname, "a");
+  }
+  fprintf(f, "%f\n", time);
+#endif
+
   SNetASTCleanup();
 
   /* tell the threading layer that it is ok to shutdown,
