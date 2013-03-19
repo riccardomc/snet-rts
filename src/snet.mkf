@@ -1,5 +1,5 @@
 THREAD=pthread lpel
-DIST=nodist mpi scc
+DIST=nodist mpi scc zmq
 
 SNETC?=snetc
 SNETCFLAGS?=-g
@@ -51,6 +51,9 @@ else
 %-scc.make:
 	$(MAKE) $*.make DEPS="$(SCCDEPS) $(DEPS)" NAME="-scc$(NAME)" \
 	    SNETCFLAGS='$(SNETCFLAGS) -distrib scc $(SCCFLAGS)'
+%-zmq.make:
+	$(MAKE) $*.make DEPS="$(ZMQDEPS) $(DEPS)" NAME="-zmq$(NAME)" \
+	    SNETCFLAGS='$(SNETCFLAGS) -distrib zmq $(ZMQFLAGS)'
 
 %.make: %.snet $(DEPS)
 	rm -f *.o *.lo .libs/*.o
