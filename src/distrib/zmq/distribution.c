@@ -374,10 +374,12 @@ snet_msg_t SNetDistribRecvMsg(void)
   result.type = type_v;
 
   switch(result.type) {
-    case snet_rec:
-      result.rec = SNetRecDeserialise(&payload_f);
     case snet_block:
     case snet_unblock:
+      /* DO NOTHING */
+      break;
+    case snet_rec:
+      result.rec = SNetRecDeserialise(&payload_f);
       result.dest = SNetDestDeserialise(&payload_f);
       SNetDistribUnpack(&source_f, &result.dest->node, sizeof(int));
       break;
@@ -417,24 +419,35 @@ void SNetDistribSendRecord(snet_dest_t *dest, snet_record_t *rec)
 
 void SNetDistribBlockDest(snet_dest_t *dest)
 {
-  zframe_t *payload = NULL;
-  SNetDestSerialise(dest, &payload);
-  SNetDistribZMQSend(payload, snet_block, dest->node);
+  (void) dest; /* NOT USED */
 }
 
 void SNetDistribUnblockDest(snet_dest_t *dest)
 {
-  zframe_t *payload = NULL;
-  SNetDestSerialise(dest, &payload);
-  SNetDistribZMQSend(payload, snet_unblock, dest->node);
+  (void) dest; /* NOT USED */
 }
 
 void SNetDistribUpdateBlocked(void)
 {
+  int rc;
   char pload_v = 0;
-  zframe_t *payload = NULL;
-  SNetDistribPack(&payload, &pload_v, sizeof(pload_v));
-  SNetDistribZMQSend(payload, snet_update, node_location);
+  int type_v = snet_update;
+  zframe_t *payload_f = NULL;
+  zframe_t *source_f = NULL;
+  zframe_t *type_f = NULL;
+  zmsg_t *msg = zmsg_new();
+
+  SNetDistribPack(&payload_f, &pload_v, sizeof(pload_v));
+  zmsg_push(msg, payload_f);
+  SNetDistribPack(&type_f, &type_v, sizeof(int));
+  zmsg_push(msg, type_f);
+  SNetDistribPack(&source_f, &node_location, sizeof(int));
+  zmsg_push(msg, source_f);
+
+  rc = zmsg_send(&msg, sock_out[node_location]);
+  if (rc != 0) {
+    SNetUtilDebugFatal("ZMQDistrib: Cannot send message to self: zmsg_send (%d)", rc);
+  }
 }
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, void *dest)
