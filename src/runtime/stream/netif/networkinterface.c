@@ -35,8 +35,21 @@
 #include "threading.h"
 #include "distribution.h"
 
+#define SNET_DBG_TIMING
+
 #ifdef SNET_DBG_TIMING
 #include <time.h>
+
+double realclock() {
+   struct timespec ts;
+   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+   return ((double) ts.tv_sec + (double) ts.tv_nsec * 1e-9);
+}
+
+double cpuclock() {
+  return (double)clock();
+}
+
 #endif
 
 static FILE *SNetInOpenFile(const char *file, const char *args)
@@ -272,8 +285,10 @@ int SNetInRun(int argc, char **argv,
   output_stream = SNetRouteUpdate(info, output_stream, 0, ast->locvec.index);
 
 #ifdef SNET_DBG_TIMING
-  clock_t b = clock();
+  double start_cpu = cpuclock();
+  double start_real = realclock();
 #endif
+
   SNetDistribStart();
 
   if (SNetDistribIsRootNode()) {
@@ -285,22 +300,25 @@ int SNetInRun(int argc, char **argv,
   }
 
   SNetDistribWaitExit(info);
-#ifdef SNET_DBG_TIMING
-  clock_t e = clock();
-  double time = (double)(e - b) / CLOCKS_PER_SEC;
-  FILE *f = stdout;
-  char *fname = getenv("SNET_DBG_TIMING");
-  if (fname) {
-    f = fopen(fname, "a");
-  }
-  fprintf(f, "%f\n", time);
-#endif
 
   SNetASTCleanup();
 
   /* tell the threading layer that it is ok to shutdown,
      and wait until it has stopped such that it can be cleaned up */
   (void) SNetThreadingStop();
+
+#ifdef SNET_DBG_TIMING
+  double end_cpu = cpuclock();
+  double end_real = realclock();
+  double time_cpu = (end_cpu - start_cpu) / CLOCKS_PER_SEC;
+  double time_real = end_real - start_real;
+  FILE *f = stdout;
+  char *fname = getenv("SNET_DBG_TIMING");
+  if (fname) {
+    f = fopen(fname, "a");
+  }
+  fprintf(f, "%f %f\n", time_real, time_cpu);
+#endif
 
   (void) SNetThreadingCleanup();
 
