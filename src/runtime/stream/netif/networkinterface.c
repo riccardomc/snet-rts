@@ -38,21 +38,18 @@
 #define SNET_DBG_TIMING
 
 #ifdef SNET_DBG_TIMING
-#include <time.h>
-
-#ifndef CLOCK_MONOTONIC_RAW
-#define CLOCK_MONOTONIC_RAW 4
-#endif
+#include <sys/time.h>
 
 double realclock() {
-   struct timespec ts;
-   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
-   return ((double) ts.tv_sec + (double) ts.tv_nsec * 1e-9);
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (double)tv.tv_sec + (double)tv.tv_usec * 1e-9;
 }
 
 double cpuclock() {
   return (double)clock();
 }
+
 #endif //SNET_DBG_TIMING
 
 static FILE *SNetInOpenFile(const char *file, const char *args)
