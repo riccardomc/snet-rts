@@ -43,7 +43,7 @@
 double realclock() {
   struct timeval tv;
   gettimeofday(&tv, NULL);
-  return (double)tv.tv_sec + (double)tv.tv_usec * 1e-9;
+  return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
 }
 
 double cpuclock() {
