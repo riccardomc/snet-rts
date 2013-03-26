@@ -23,6 +23,8 @@
 
 #define SNET_ZMQ_DPORT 20737
 #define SNET_ZMQ_SPORT 20738
+#define SNET_ZMQ_SNDHWM 1
+#define SNET_ZMQ_RCVHWM 1
 
 static zctx_t *context;
 static void *sock_in;
@@ -36,6 +38,9 @@ static int sync_port;
 static int data_port;
 static int net_size;
 static char root_addr[256];
+
+static int recv_hwm;
+static int send_hwm;
 
 static zmutex_t *send_mtx;
 
@@ -239,6 +244,8 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   node_location = -1;
   data_port = SNET_ZMQ_DPORT;
   sync_port = SNET_ZMQ_SPORT;
+  send_hwm = SNET_ZMQ_SNDHWM;
+  recv_hwm = SNET_ZMQ_RCVHWM;
   net_size = 1;
 
   for (i = 0; i < argc; i++) {
@@ -264,7 +271,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
 
   sock_in = zsocket_new(context, ZMQ_PULL);
   if (!sock_in) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
-
+  zmq_setsockopt(socket, ZMQ_RCVHWM, &recv_hwm, sizeof(int));
   zsocket_bind(sock_in, "tcp://*:%d", data_port);
 
   if (node_location == 0)
@@ -275,6 +282,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   sock_out = SNetMemAlloc(SNetDistribZMQHostsCount() * sizeof(void *));
   for (i = 0 ; i < SNetDistribZMQHostsCount(); i++) {
     sock_out[i] = zsocket_new(context, ZMQ_PUSH);
+    zmq_setsockopt(socket, ZMQ_SNDHWM, &send_hwm, sizeof(int));
     if (!sock_out[i]) SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
   }
 
