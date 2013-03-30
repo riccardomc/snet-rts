@@ -8,6 +8,28 @@
 #include "reference.h"
 #include "snetentities.h"
 
+#define SNET_DBG_TIMING
+
+#ifdef SNET_DBG_TIMING
+#include <time.h>
+#include <sys/time.h>
+#include <stdlib.h>
+static double start_cpu, start_real;
+static double end_cpu, end_real;
+static double time_cpu, time_real;
+
+double realclock() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
+}
+
+double cpuclock() {
+  return (double)clock();
+}
+
+#endif //SNET_DBG_TIMING
+
 static bool running = true;
 static snet_info_tag_t prevDest;
 static pthread_cond_t exitCond = PTHREAD_COND_INITIALIZER;
@@ -34,6 +56,12 @@ void SNetDistribInit(int argc, char **argv, snet_info_t *info)
 
 void SNetDistribStart(void)
 {
+
+#ifdef SNET_DBG_TIMING
+  start_cpu = cpuclock();
+  start_real = realclock();
+#endif
+
   SNetOutputManagerStart();
   SNetInputManagerStart();
 }
@@ -53,6 +81,20 @@ void SNetDistribWaitExit(snet_info_t *info)
   pthread_mutex_lock(&exitMutex);
   while (running) pthread_cond_wait(&exitCond, &exitMutex);
   pthread_mutex_unlock(&exitMutex);
+
+#ifdef SNET_DBG_TIMING
+  end_cpu = cpuclock();
+  end_real = realclock();
+  time_cpu = (end_cpu - start_cpu) / CLOCKS_PER_SEC;
+  time_real = end_real - start_real;
+  FILE *f = stdout;
+  char *fname = getenv("SNET_DBG_TIMING_LOG");
+  if (fname != NULL) {
+    f = fopen(fname, "ab+");
+  }
+  fprintf(f, "%f %f\n", time_real, time_cpu);
+#endif
+
 }
 
 snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *in,
