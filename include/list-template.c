@@ -202,6 +202,27 @@ bool LIST_FUNCTION(LIST_NAME, Contains)(snet_list_t *list, LIST_VAL val)
   return false;
 }
 
+int LIST_FUNCTION(LIST_NAME, Find)(snet_list_t *list, LIST_VAL val)
+{
+  int index = -1;
+  LIST_VAL tmp;
+
+  LIST_FOR_EACH(list, tmp) {
+    index++;
+    #ifdef LIST_CMP
+      if (LIST_CMP(tmp, val)) {
+        return index;
+      }
+    #else
+      if (tmp == val) {
+        return index;
+      }
+    #endif
+  }
+
+ return -1;
+
+}
 
 
 LIST_VAL LIST_FUNCTION(LIST_NAME, Get)(snet_list_t *list, int i)

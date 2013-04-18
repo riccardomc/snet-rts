@@ -95,6 +95,7 @@ LIST_VAL_H LIST_FUNCTION(LIST_NAME_H, PopStart)(snet_list_t *list);
 LIST_VAL_H LIST_FUNCTION(LIST_NAME_H, PopEnd)(snet_list_t *list);
 
 bool LIST_FUNCTION(LIST_NAME_H, Contains)(snet_list_t *list, LIST_VAL_H val);
+int LIST_FUNCTION(LIST_NAME_H, Find)(snet_list_t *list, LIST_VAL_H val);
 
 LIST_VAL_H LIST_FUNCTION(LIST_NAME_H, Get)(snet_list_t *list, int i);
 LIST_VAL_H LIST_FUNCTION(LIST_NAME_H, Remove)(snet_list_t *list, int i);
