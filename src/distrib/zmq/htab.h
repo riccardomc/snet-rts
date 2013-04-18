@@ -8,7 +8,19 @@
 #ifndef DISTRIBZMQHTAB_H
 #define DISTRIBZMQHTAB_H
 
+#include <zmq.h>
+#include <czmq.h>
+
 #define HTAB_HNAME_LEN 256
+#define HTAB_MAX_HOSTS 1024
+
+typedef struct {
+  zctx_t *ctx;
+  int sport;
+  int dport;
+  int node_location;
+  char raddr[300];
+} htab_opts_t;
 
 typedef struct {
   int data_port;
@@ -17,45 +29,51 @@ typedef struct {
   char *bind;
 } htab_host_t;
 
-typedef struct {
-  int size;
-  htab_host_t **tab;
-} htab_t;
+typedef enum {
+  htab_init,
 
-//Read htab from file. Returns NULL on failure.
-htab_t *htab_fread(char *tablefile);
+  htab_host,
+  htab_id,
 
-//Allocate an htab of size size. Returns NULL on failure.
-htab_t *htab_alloc(size_t size);
+  htab_lookup,
+  htab_fail
+} htab_msg;
 
-//Destroy the htab.
-void htab_free(htab_t *table);
 
-//Returns the size of an htab.
-size_t htab_size(htab_t *table);
+/* host items */
+htab_host_t *HTabHostAlloc();
+htab_host_t *HTabHostCreate(char *host, char *bind,
+    int data_port, int sync_port);
+void HTabHostFree(htab_host_t *host);
+bool HTabHostCompare(htab_host_t *h1, htab_host_t *h2);
 
-//Print htab table on stdout.
-void htab_dump(htab_t *table);
+void HTabHostPack(htab_host_t *host, void *buf);
+htab_host_t *HTabHostUnpack(void *buf);
 
-//Returns the host item at index in tab. Returns NULL on failure.
-htab_host_t *htab_lookup(htab_t *table, size_t index);
+/* host table */
+int HTabAdd(htab_host_t *h);
+void HTabSet(htab_host_t *h, int index);
+int HTabRemove(int index);
+htab_host_t *HTabGet(int index);
+void HTabFree();
+void HTabDump();
 
-//Serialise the host item host in buf.
-void htab_host_pack(htab_host_t *host, void *buf,
-    void (*packFun)(void *, void *, size_t)); 
+/* threading part */
+void SNetDistribZMQHTabInit(int dport, int sport,
+    int node_location, char *raddr);
+void SNetDistribZMQHTabStart(void);
+void SNetDistribZMQHTabStop(void);
+void SNetDistribZMQHTab(void *args);
+htab_host_t *SNetDistribZMQHTabLookUp(int index);
+int SNetDistribZMQHTabCount();
 
-//Deserialise an host item from buf and return it.
-htab_host_t *htab_host_unpack(void *buf, 
-    void (*unpackFun)(void *, void *, size_t));
+/* interface */
+htab_host_t *HTabRLookUp(int index);
+int HTabSend(zmsg_t *msg, int destination);
+zmsg_t *HTabRecv();
+int HTabNodeLocation(void);
 
-//Serialise the host table table in buf.
-  void htab_pack(htab_t *table, void *buf,
-    void (*packFun)(void *, void *, size_t)); 
-
-//Deserialise an host table from buf and return it.
-htab_t *htab_unpack(void *buf,
-    void (*unpackFun)(void *, void *, size_t)); 
-
+/* utils */
 char *htab_gethostname(void);
 #endif
 
