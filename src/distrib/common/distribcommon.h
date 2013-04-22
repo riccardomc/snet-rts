@@ -100,7 +100,6 @@ inline static snet_dest_t *SNetDestCreate()
   dest->dynamicNode = 0;
   dest->dynamicLoc = 0;
   dest->id = SNetIntListCreate(0);
-  SNetIntListAppendStart(dest->id, 0);
 
   return dest;
 }

@@ -259,9 +259,6 @@ int SNetInRun(int argc, char **argv,
 
   SNetObserverInit(labels, interfaces);
 
-  SNetIdInit(info);
-  SNetIdAppend(info, 0);
-
   snet_ast_t *ast = SNetASTInit(fun, 0);
   input_stream = SNetStreamCreate(0);
   output_stream = SNetInstantiate(ast, input_stream, info);
