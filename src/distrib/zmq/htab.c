@@ -343,7 +343,6 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   if (opts.node_location == 0) {
     zsocket_bind(sockp, "tcp://*:%d/", opts.sport);
     //Add yourself as node 0 and connect to yourself.
-    hostname = HTabGetHostname();
     HTabAdd(HTabHostCreate(hostname, "*", opts.dport, opts.sport));
     zsocket_connect(sockq, "tcp://%s:%d/", hostname, opts.sport);
 
@@ -367,6 +366,10 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
 
     //add yourself
     HTabSet(HTabHostCreate(hostname, "*", opts.dport, opts.sport), opts.node_location);
+
+    zframe_destroy(&type_f);
+    zframe_destroy(&data_f);
+    zmsg_destroy(&msg);
  }
 
 }
@@ -430,7 +433,13 @@ static void HTabLoopRoot(void *args)
         //FIXME: decide what to do here
         break;
     }
+
+    zframe_destroy(&type_f);
+    zframe_destroy(&data_f);
+    zmsg_destroy(&msg);
+
   }
+
 }
 
 static void HTabLoopNode(void *args) 
