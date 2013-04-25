@@ -42,8 +42,10 @@
 #undef LIST_TYPE_NAME
 #undef LIST_NAME
 
-#define SNET_ZMQ_SNDHWM 5
-#define SNET_ZMQ_RCVHWM 5
+#define SNET_ZMQ_SNDHWM_V 1000
+#define SNET_ZMQ_RCVHWM_V 1000
+#define SNET_ZMQ_DATATO_V 10000 //data time out
+#define SNET_ZMQ_SYNCTO_V 120000 //sync time out
 
 typedef int (*sendfun)(zmsg_t*, int);
 
@@ -60,9 +62,10 @@ static void *sockq; // sync query socket
 static void *sock_in; // incoming data socket
 
 static char *hostname;
-
-static int recv_hwm = SNET_ZMQ_RCVHWM;
-static int send_hwm = SNET_ZMQ_SNDHWM;
+static int sndhwm = SNET_ZMQ_SNDHWM_V;
+static int rcvhwm = SNET_ZMQ_RCVHWM_V;
+static int datato = SNET_ZMQ_DATATO_V;
+static int syncto = SNET_ZMQ_SYNCTO_V;
 
 /*
 * Host Items
@@ -296,13 +299,30 @@ char *HTabGetHostname()
   return hostname;
 }
 
+/*
+* Check if envname environment variable is set.
+* If it is assume is an integer value and assign it to parm. 
+*/
+static bool HTabCheckEnv(char *envname, int *parm)
+{
+  bool ret = false;
+  char *envval = getenv(envname);
+  if (envval != NULL) {
+    *parm = atoi(envval);
+    ret = true;
+  }
+  return ret;
+}
+
+
 /** 
 * Threading 
 */
 
 
 static int HTabFirstSend(zmsg_t *msg, int dest); //FIXME: make compiler happy
-static void HTabMsg(zframe_t *data, int type, void *socket);
+static void HTabSyncSend(zframe_t *data, int type, void *socket);
+static zmsg_t *HTabSyncRecv(void *socket);
 
 void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr)
 {
@@ -322,9 +342,18 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   
   hostname = HTabGetHostname();
 
+  HTabCheckEnv("SNET_ZMQ_SNDHWM", &sndhwm);
+  HTabCheckEnv("SNET_ZMQ_RCVHWM", &rcvhwm);
+  HTabCheckEnv("SNET_ZMQ_DATATO", &datato);
+  HTabCheckEnv("SNET_ZMQ_SYNCTO", &syncto);
+
   //init sync and data sockets
   sockp = zsocket_new(opts.ctx, ZMQ_REP);
   sockq = zsocket_new(opts.ctx, ZMQ_REQ);
+  zsocket_set_rcvtimeo(sockp, syncto);
+  zsocket_set_sndtimeo(sockp, syncto);
+  zsocket_set_rcvtimeo(sockq, syncto);
+  zsocket_set_sndtimeo(sockq, syncto);
 
   for (int i = 0 ; i < HTAB_MAX_HOSTS ; i++) {
     sock_out[i] = NULL;
@@ -335,7 +364,8 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   if (sock_in == NULL) {
     SNetUtilDebugFatal("ZMQDistrib: %s", strerror(errno));
   }
-  zmq_setsockopt(sock_in, ZMQ_RCVHWM, &recv_hwm, sizeof(int));
+  zsocket_set_rcvtimeo(sock_in, datato);
+  zsocket_set_rcvhwm(sock_in, rcvhwm);
   zsocket_bind(sock_in, "tcp://*:%d", opts.dport);
 
   HTabInit();
@@ -356,10 +386,10 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
 
     host = HTabHostCreate(hostname, "*", opts.dport, opts.sport);
     HTabHostPack(host, &data_f);
-    HTabMsg(data_f, htab_host, sockq); //send host
+    HTabSyncSend(data_f, htab_host, sockq); //send host
     HTabHostFree(host);
 
-    msg = zmsg_recv(sockq); //recv id
+    msg = HTabSyncRecv(sockq); //recv id
     type_f = zmsg_pop(msg);
     data_f = zmsg_pop(msg);
     SNetDistribUnpack(&data_f, &opts.node_location, sizeof(int));
@@ -385,8 +415,6 @@ void SNetDistribZMQHTabStop(void)
 {
   pthread_mutex_lock(&htablock);
   running = false;
-  free(hostname);
-  HTabFree();
   pthread_mutex_unlock(&htablock);
 }
 
@@ -403,7 +431,7 @@ static void HTabLoopRoot(void *args)
   while (running) {
     reply_f = NULL;
 
-    msg = zmsg_recv(sockp);
+    msg = HTabSyncRecv(sockp);
     type_f = zmsg_pop(msg);
     data_f = zmsg_pop(msg);
 
@@ -414,7 +442,7 @@ static void HTabLoopRoot(void *args)
         host = HTabHostUnpack(&data_f);
         newid = HTabAdd(host);
         SNetDistribPack(&reply_f, &newid, sizeof(int));
-        HTabMsg(reply_f, htab_id, sockp);
+        HTabSyncSend(reply_f, htab_id, sockp);
         break;
 
       case htab_lookup:
@@ -422,10 +450,10 @@ static void HTabLoopRoot(void *args)
         host = HTabGet(id);
         if (host == NULL) {
           SNetDistribPack(&reply_f, &id, sizeof(int));
-          HTabMsg(reply_f, htab_fail, sockp);
+          HTabSyncSend(reply_f, htab_fail, sockp);
         } else {
           HTabHostPack(host, &reply_f);
-          HTabMsg(reply_f, htab_host, sockp);
+          HTabSyncSend(reply_f, htab_host, sockp);
         }
       break;
 
@@ -440,15 +468,17 @@ static void HTabLoopRoot(void *args)
 
   }
 
+
 }
 
 static void HTabLoopNode(void *args) 
 {
 
   while (running) {
-    //FIXME: what a node should do?
-    sleep(1);
+    //FIXME: nodes control protocol?
+    zclock_sleep(1000);
   }
+
 }
 
 
@@ -461,6 +491,8 @@ void SNetDistribZMQHTab(void *args)
     HTabLoopNode(args);
   }
 
+  free(hostname);
+  HTabFree();
   pthread_mutex_destroy(&htablock);
 
 }
@@ -502,11 +534,26 @@ static int HTabFirstSend(zmsg_t *msg, int dest)
 // Receive wrapper function
 zmsg_t *HTabRecv()
 {
-  return zmsg_recv(sock_in);
+  zmsg_t *msg = zmsg_recv(sock_in);
+  if (msg == NULL) {
+    SNetUtilDebugFatal("ZMQDistrib DATA recv timeout: %s", strerror(errno));
+  }
+
+  return msg;
+}
+
+static zmsg_t *HTabSyncRecv(void *socket)
+{
+  zmsg_t *msg = zmsg_recv(socket);
+  if (msg == NULL) {
+    SNetUtilDebugFatal("ZMQDistrib SYNC recv timeout: %s", strerror(errno));
+  }
+
+  return msg;
 }
 
 // Send control htab_msg messages 
-static void HTabMsg(zframe_t *data, int type, void *socket)
+static void HTabSyncSend(zframe_t *data, int type, void *socket)
 {
   int rc;
   zframe_t *type_f = NULL;
@@ -520,7 +567,7 @@ static void HTabMsg(zframe_t *data, int type, void *socket)
   rc = zmsg_send(&msg, socket);
 
   if (rc != 0) {
-    //FIXME: Add some error handling.
+    SNetUtilDebugFatal("ZMQDistrib SYNC send timeout: %s", strerror(errno));
   }
 
 }
@@ -565,7 +612,7 @@ int SNetDistribZMQConnect(int index)
       //FIXME: add some error handling.
     }
 
-    zmq_setsockopt(sock_out[index], ZMQ_SNDHWM, &send_hwm, sizeof(int));
+    zsocket_set_sndhwm(sock_out[index], sndhwm);
     ret = zsocket_connect(sock_out[index], "tcp://%s:%d/", host->host, host->data_port);
 
   } else {
@@ -626,8 +673,8 @@ htab_host_t *HTabRLookUp(int index)
   htab_host_t *newhost = NULL;
 
   SNetDistribPack(&data_f, &index, sizeof(int));
-  HTabMsg(data_f, htab_lookup, sockq);
-  reply = zmsg_recv(sockq);
+  HTabSyncSend(data_f, htab_lookup, sockq);
+  reply = HTabSyncRecv(sockq);
   type_f = zmsg_pop(reply);
   SNetDistribUnpack(&type_f, &type_v, sizeof(int));
   if (type_v == htab_fail) {
