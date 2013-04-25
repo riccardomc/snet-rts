@@ -248,7 +248,6 @@ int HTabRemove(int index)
   pthread_mutex_lock(&htablock);
   if (hostid[index] != NULL) {
     list_index = SNetHostListFind(hostlist, hostid[index]);
-    printf("REM: %d\n", list_index);
     if (list_index >= 0) {
       HTabHostFree(SNetHostListRemove(hostlist, list_index));
     }
@@ -259,7 +258,7 @@ int HTabRemove(int index)
   return list_index;
 }
 
-htab_host_t *HTabGet(int index)
+htab_host_t *HTabLookUp(int index)
 {
   static htab_host_t *ret;
   pthread_mutex_lock(&htablock);
@@ -324,6 +323,47 @@ static int HTabFirstSend(zmsg_t *msg, int dest); //FIXME: make compiler happy
 static void HTabSyncSend(zframe_t *data, int type, void *socket);
 static zmsg_t *HTabSyncRecv(void *socket);
 
+static void HTabPart() {
+  zframe_t *data_f = NULL;
+  zmsg_t *msg = NULL;
+
+  SNetDistribPack(&data_f, &opts.node_location, sizeof(int));
+  HTabSyncSend(data_f, htab_part, sockq);
+  msg = HTabSyncRecv(sockq); //we don't care about the payload.
+  zmsg_destroy(&msg);
+}
+
+static void HTabConnect() {
+  if (opts.node_location == 0) {
+    zsocket_bind(sockp, "tcp://*:%d/", opts.sport);
+    //Add yourself as node 0 and connect to yourself.
+    HTabAdd(HTabHostCreate(hostname, "*", opts.dport, opts.sport));
+    zsocket_connect(sockq, "tcp://%s:%d/", hostname, opts.sport);
+
+  } else {
+    zframe_t *type_f = NULL;
+    zframe_t *data_f = NULL;
+    zmsg_t *msg = NULL;
+    htab_host_t *host;
+
+    zsocket_connect(sockq, opts.raddr);
+
+    host = HTabHostCreate(hostname, "*", opts.dport, opts.sport);
+    HTabHostPack(host, &data_f);
+    HTabSyncSend(data_f, htab_host, sockq); //send host
+
+    msg = HTabSyncRecv(sockq); //recv id
+    type_f = zmsg_pop(msg);
+    data_f = zmsg_pop(msg);
+    SNetDistribUnpack(&data_f, &opts.node_location, sizeof(int));
+    HTabSet(host, opts.node_location); //add yourself
+
+    zframe_destroy(&type_f);
+    zframe_destroy(&data_f);
+    zmsg_destroy(&msg);
+ }
+}
+
 void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr)
 {
   opts.ctx = zctx_new();
@@ -370,37 +410,7 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
 
   HTabInit();
 
-  if (opts.node_location == 0) {
-    zsocket_bind(sockp, "tcp://*:%d/", opts.sport);
-    //Add yourself as node 0 and connect to yourself.
-    HTabAdd(HTabHostCreate(hostname, "*", opts.dport, opts.sport));
-    zsocket_connect(sockq, "tcp://%s:%d/", hostname, opts.sport);
-
-  } else {
-    zframe_t *type_f = NULL;
-    zframe_t *data_f = NULL;
-    zmsg_t *msg = NULL;
-    htab_host_t *host;
-
-    zsocket_connect(sockq, opts.raddr);
-
-    host = HTabHostCreate(hostname, "*", opts.dport, opts.sport);
-    HTabHostPack(host, &data_f);
-    HTabSyncSend(data_f, htab_host, sockq); //send host
-    HTabHostFree(host);
-
-    msg = HTabSyncRecv(sockq); //recv id
-    type_f = zmsg_pop(msg);
-    data_f = zmsg_pop(msg);
-    SNetDistribUnpack(&data_f, &opts.node_location, sizeof(int));
-
-    //add yourself
-    HTabSet(HTabHostCreate(hostname, "*", opts.dport, opts.sport), opts.node_location);
-
-    zframe_destroy(&type_f);
-    zframe_destroy(&data_f);
-    zmsg_destroy(&msg);
- }
+  HTabConnect();
 
 }
 
@@ -413,6 +423,13 @@ void SNetDistribZMQHTabStart(void)
 
 void SNetDistribZMQHTabStop(void)
 {
+  if (opts.node_location == 0) {
+    while (SNetDistribZMQHTabCount() - 1) {
+      zclock_sleep(1);
+    }
+  } else {
+    HTabPart();
+  }
   pthread_mutex_lock(&htablock);
   running = false;
   pthread_mutex_unlock(&htablock);
@@ -447,7 +464,7 @@ static void HTabLoopRoot(void *args)
 
       case htab_lookup:
         SNetDistribUnpack(&data_f, &id, sizeof(int));
-        host = HTabGet(id);
+        host = HTabLookUp(id);
         if (host == NULL) {
           SNetDistribPack(&reply_f, &id, sizeof(int));
           HTabSyncSend(reply_f, htab_fail, sockp);
@@ -455,7 +472,14 @@ static void HTabLoopRoot(void *args)
           HTabHostPack(host, &reply_f);
           HTabSyncSend(reply_f, htab_host, sockp);
         }
-      break;
+        break;
+
+      case htab_part:
+        SNetDistribUnpack(&data_f, &id, sizeof(int));
+        HTabRemove(id);
+        SNetDistribPack(&reply_f, &id, sizeof(int));
+        HTabSyncSend(reply_f, htab_part, sockp);
+        break;
 
       default:
         //FIXME: decide what to do here
@@ -580,9 +604,9 @@ static void HTabSyncSend(zframe_t *data, int type, void *socket)
 htab_host_t *SNetDistribZMQHTabLookUp(int index)
 {
   static htab_host_t *ret;
-  ret = HTabGet(index);
+  ret = HTabLookUp(index);
   if (ret == NULL) {
-    ret = HTabRLookUp(index);
+    ret = HTabRemoteLookUp(index);
   }
 
   return ret;
@@ -663,7 +687,7 @@ int HTabNodeLocation()
 * Remote calls
 */
 
-htab_host_t *HTabRLookUp(int index)
+htab_host_t *HTabRemoteLookUp(int index)
 {
   int type_v;
 

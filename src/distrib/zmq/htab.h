@@ -34,6 +34,7 @@ typedef enum {
 
   htab_host,
   htab_id,
+  htab_part,
 
   htab_lookup,
   htab_fail
@@ -42,8 +43,8 @@ typedef enum {
 
 /* host items */
 htab_host_t *HTabHostAlloc();
-htab_host_t *HTabHostCreate(char *host, char *bind,
-    int data_port, int sync_port);
+htab_host_t *HTabHostCreate(char *host, char *bind, int data_port,
+    int sync_port);
 void HTabHostFree(htab_host_t *host);
 bool HTabHostCompare(htab_host_t *h1, htab_host_t *h2);
 
@@ -54,13 +55,13 @@ htab_host_t *HTabHostUnpack(void *buf);
 int HTabAdd(htab_host_t *h);
 void HTabSet(htab_host_t *h, int index);
 int HTabRemove(int index);
-htab_host_t *HTabGet(int index);
+htab_host_t *HTabLookUp(int index);
 void HTabFree();
 void HTabDump();
 
 /* threading part */
-void SNetDistribZMQHTabInit(int dport, int sport,
-    int node_location, char *raddr);
+void SNetDistribZMQHTabInit(int dport, int sport, int node_location,
+    char *raddr);
 void SNetDistribZMQHTabStart(void);
 void SNetDistribZMQHTabStop(void);
 void SNetDistribZMQHTab(void *args);
@@ -68,7 +69,7 @@ htab_host_t *SNetDistribZMQHTabLookUp(int index);
 int SNetDistribZMQHTabCount();
 
 /* interface */
-htab_host_t *HTabRLookUp(int index);
+htab_host_t *HTabRemoteLookUp(int index);
 int HTabSend(zmsg_t *msg, int destination);
 zmsg_t *HTabRecv();
 int HTabNodeLocation(void);
