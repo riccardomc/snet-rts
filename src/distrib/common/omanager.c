@@ -77,19 +77,25 @@ void SNetOutputManagerNewOut(snet_dest_t *dest, snet_stream_t *stream)
 
 static void UpdateState(snet_dest_t *dest, bool block)
 {
+  static snet_dest_list_t *destlist = NULL;
   pthread_mutex_lock(&outputManagerMutex);
-  SNetDestListAppendEnd(block ? newBlocked : newUnblocked, dest);
-  snet_stream_desc_t *sd = SNetStreamOpen(wakeupStream, 'w');
-  SNetStreamTryWrite(sd, (void*)1);
-  SNetStreamClose(sd, false);
+  destlist = block ? newBlocked : newUnblocked;
+  if (!SNetDestListContains(destlist, dest)) {
+    SNetDestListAppendEnd(destlist, dest);
+    snet_stream_desc_t *sd = SNetStreamOpen(wakeupStream, 'w');
+    SNetStreamTryWrite(sd, (void*)1);
+    SNetStreamClose(sd, false);
+  }
   pthread_mutex_unlock(&outputManagerMutex);
 }
 
-void SNetOutputManagerBlock(snet_dest_t *dest) { 
+void SNetOutputManagerBlock(snet_dest_t *dest)
+{
   UpdateState(SNetDestCopy(dest), true);
 }
 
-void SNetOutputManagerUnblock(snet_dest_t *dest) { 
+void SNetOutputManagerUnblock(snet_dest_t *dest)
+{
   UpdateState(SNetDestCopy(dest), false);
 }
 
@@ -171,7 +177,9 @@ void SNetOutputManager(void *args)
       SNetStreamRead(sd);
       UpdateOutgoing(streamMap, &waiting);
       UpdateBlocked(streamMap, newBlocked, &waiting, &blocked);
-      UpdateBlocked(streamMap, newUnblocked, &blocked, &waiting);
+      if (blocked != NULL) {
+        UpdateBlocked(streamMap, newUnblocked, &blocked, &waiting);
+      }
       continue;
     }
 
