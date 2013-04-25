@@ -31,9 +31,6 @@ static int net_size;
 static int node_location;
 static char root_addr[300];
 
-static zmutex_t *send_mtx;
-
-
 void SNetDistribZMQPack(zframe_t **dstframe, void *src, size_t count)
 {
   if (*dstframe != NULL) {
@@ -138,26 +135,12 @@ inline static void SNetDistribZMQSend(zframe_t *payload, int type, int destinati
 
 void SNetDistribImplementationInit(int argc, char **argv, snet_info_t *info)
 {
-
   SNetDistribZMQHostsInit(argc, argv);
-  send_mtx = zmutex_new();
-
-  for (int i = 0; i < argc; i++) {
-    if (strcmp(argv[i], "-debugWait") == 0) {
-      volatile int stop = 0;
-      printf("ZMQDistrib: PID %d on node %d listening on %s\n",
-          getpid(), node_location, SNetDistribZMQHTabLookUp(node_location)->host);
-      fflush(stdout);
-      while (0 == stop) sleep(5);
-      break;
-    }
-  }
 }
 
 void SNetDistribLocalStop(void)
 {
   SNetDistribZMQHTabStop();
-  zmutex_destroy(&send_mtx);
 }
 
 void SNetDistribFetchRef(snet_ref_t *ref)
@@ -185,7 +168,7 @@ snet_msg_t SNetDistribRecvMsg(void)
 
   static zmsg_t *msg;
 
-  msg = HTabRecv(); //FIXME: do some proper error checking?
+  msg = HTabRecv();
 
   source_f = zmsg_pop(msg);
   type_f = zmsg_pop(msg);
@@ -291,9 +274,9 @@ void SNetDistribGlobalStop(void)
   for (i--; i >= 0; i--) {
     zframe_t *payload = NULL;
     SNetDistribPack(&payload, &pload_v, sizeof(pload_v));
-
     SNetDistribZMQSend(payload, snet_stop, i);
   }
+
 }
 
 int SNetDistribGetNodeId(void)
