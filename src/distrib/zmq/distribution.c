@@ -29,7 +29,8 @@ static int sync_port;
 static int data_port;
 static int net_size;
 static int node_location;
-static char root_addr[300];
+static char root_addr[HTAB_ADDRN_LEN];
+static char host_name[HTAB_HNAME_LEN];
 
 void SNetDistribZMQPack(zframe_t **dstframe, void *src, size_t count)
 {
@@ -89,7 +90,9 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
 
   for (i = 0; i < argc; i++) {
     if (strcmp(argv[i], "-raddr") == 0) {
-      strcpy(root_addr, argv[i+1]);
+      strncpy(root_addr, argv[i+1], HTAB_HNAME_LEN);
+    } else if (strcmp(argv[i], "-hostn") == 0) {
+      strncpy(host_name, argv[i+1], HTAB_HNAME_LEN);
     } else if (strcmp(argv[i], "-sport") == 0) {
       sync_port = atoi(argv[i+1]);
     } else if (strcmp(argv[i], "-dport") == 0) {
@@ -104,7 +107,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     SNetUtilDebugFatal("ZMQDistrib: <[-root <net_size>] | [-raddr <root_addr]>");
   }
 
-  SNetDistribZMQHTabInit(data_port, sync_port, node_location, root_addr);
+  SNetDistribZMQHTabInit(data_port, sync_port, node_location, root_addr, host_name);
   node_location = HTabNodeLocation();
 
   SNetDistribZMQHTabStart();

@@ -300,9 +300,8 @@ char *HTabGetHostname()
 
 /*
 * Check if envname environment variable is set.
-* If it is assume is an integer value and assign it to parm. 
 */
-static bool HTabCheckEnv(char *envname, int *parm)
+static bool HTabCheckEnvInt(char *envname, int *parm)
 {
   bool ret = false;
   char *envval = getenv(envname);
@@ -313,6 +312,16 @@ static bool HTabCheckEnv(char *envname, int *parm)
   return ret;
 }
 
+static bool HTabCheckEnvStr(char *envname, char *parm)
+{
+  bool ret = false;
+  char *envval = getenv(envname);
+  if (envval != NULL) {
+    strncpy(parm, envval, HTAB_HNAME_LEN);
+    ret = true;
+  }
+  return ret;
+}
 
 /** 
 * Threading 
@@ -364,7 +373,7 @@ static void HTabConnect() {
  }
 }
 
-void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr)
+void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr, char*hname)
 {
   opts.ctx = zctx_new();
 
@@ -378,14 +387,20 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   opts.dport = dport;
   opts.sport = sport;
   opts.node_location = node_location;
-  strncpy(opts.raddr, raddr, 300); //FIXME: n variable?
-  
-  hostname = HTabGetHostname();
+  strncpy(opts.raddr, raddr, HTAB_ADDRN_LEN);
+ 
+  if (strcmp(hname, "") == 0) {
+    hostname = HTabGetHostname();
+    HTabCheckEnvStr("SNET_ZMQ_HOSTNM", hostname);
+  } else {
+    hostname = hname;
+  }
 
-  HTabCheckEnv("SNET_ZMQ_SNDHWM", &sndhwm);
-  HTabCheckEnv("SNET_ZMQ_RCVHWM", &rcvhwm);
-  HTabCheckEnv("SNET_ZMQ_DATATO", &datato);
-  HTabCheckEnv("SNET_ZMQ_SYNCTO", &syncto);
+  HTabCheckEnvInt("SNET_ZMQ_SNDHWM", &sndhwm);
+  HTabCheckEnvInt("SNET_ZMQ_RCVHWM", &rcvhwm);
+  HTabCheckEnvInt("SNET_ZMQ_DATATO", &datato);
+  HTabCheckEnvInt("SNET_ZMQ_SYNCTO", &syncto);
+
 
   //init sync and data sockets
   sockp = zsocket_new(opts.ctx, ZMQ_REP);

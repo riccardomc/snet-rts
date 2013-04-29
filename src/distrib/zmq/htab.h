@@ -12,6 +12,7 @@
 #include <czmq.h>
 
 #define HTAB_HNAME_LEN 256
+#define HTAB_ADDRN_LEN 300
 #define HTAB_MAX_HOSTS 1024
 
 typedef struct {
@@ -61,7 +62,7 @@ void HTabDump();
 
 /* threading part */
 void SNetDistribZMQHTabInit(int dport, int sport, int node_location,
-    char *raddr);
+    char *raddr, char *hname);
 void SNetDistribZMQHTabStart(void);
 void SNetDistribZMQHTabStop(void);
 void SNetDistribZMQHTab(void *args);
