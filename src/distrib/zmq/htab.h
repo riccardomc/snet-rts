@@ -75,7 +75,11 @@ int HTabSend(zmsg_t *msg, int destination);
 zmsg_t *HTabRecv();
 int HTabNodeLocation(void);
 
-/* utils */
-char *htab_gethostname(void);
+/* cloud */
+
+#define SNET_CLOUD_RUN_V "$SNET_DIR/bin/snet-on-cloud"
+
+void SNetCloudInstantiateStatic(char *exe, int net_size);
+
 #endif
 

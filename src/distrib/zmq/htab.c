@@ -284,7 +284,7 @@ void HTabDump()
 * Utils
 */
 
-char *HTabGetHostname()
+static char *HTabGetHostname()
 {
   //FIXME: consider using getaddrinfo
   char *hostname = malloc(sizeof(char) * 256);
@@ -400,7 +400,6 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   HTabCheckEnvInt("SNET_ZMQ_RCVHWM", &rcvhwm);
   HTabCheckEnvInt("SNET_ZMQ_DATATO", &datato);
   HTabCheckEnvInt("SNET_ZMQ_SYNCTO", &syncto);
-
 
   //init sync and data sockets
   sockp = zsocket_new(opts.ctx, ZMQ_REP);
@@ -733,3 +732,30 @@ htab_host_t *HTabRemoteLookUp(int index)
   return newhost;
 }
 
+
+/*
+* Cloud
+* FIXME: refactor moving in another source file
+*/
+
+void SNetCloudInstantiateStatic(char *exe, int net_size)
+{
+  /*
+   * FIXME: This is a proof of concept.
+   * We need a more sophisticated instantiation process.
+   */
+  int i;
+
+  char run[1024] = SNET_CLOUD_RUN_V;
+  char cmd[1024];
+  char raddr[HTAB_ADDRN_LEN];
+
+  HTabCheckEnvStr("SNET_CLOUD_RUN", run);
+  sprintf(raddr, "tcp://%s:%d/", hostname, opts.sport);
+  sprintf(cmd, "%s %s -- %s &", run, exe, raddr);
+
+  for (i = 0 ; i < net_size ; i++) {
+    system(cmd);
+  }
+
+}

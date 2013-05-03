@@ -28,6 +28,7 @@ static int node_location;
 static int sync_port;
 static int data_port;
 static int net_size;
+static bool on_cloud;
 static int node_location;
 static char root_addr[HTAB_ADDRN_LEN];
 static char host_name[HTAB_HNAME_LEN];
@@ -87,8 +88,9 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   data_port = SNET_ZMQ_DPORT;
   sync_port = SNET_ZMQ_SPORT;
   net_size = 1;
+  on_cloud = false;
 
-  for (i = 0; i < argc; i++) {
+  for (i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-raddr") == 0) {
       strncpy(root_addr, argv[i+1], HTAB_HNAME_LEN);
     } else if (strcmp(argv[i], "-hostn") == 0) {
@@ -100,6 +102,8 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     } else if (strcmp(argv[i], "-root") == 0) {
       net_size = atoi(argv[i+1]);
       node_location = 0;
+    } else if (strcmp(argv[i], "-cloud") == 0) {
+      on_cloud = true;
     }
   }
 
@@ -107,8 +111,13 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     SNetUtilDebugFatal("ZMQDistrib: <[-root <net_size>] | [-raddr <root_addr]>");
   }
 
+
   SNetDistribZMQHTabInit(data_port, sync_port, node_location, root_addr, host_name);
   node_location = HTabNodeLocation();
+
+  if (on_cloud && node_location == 0) {
+    SNetCloudInstantiateStatic(argv[0], net_size);
+  }
 
   SNetDistribZMQHTabStart();
 
