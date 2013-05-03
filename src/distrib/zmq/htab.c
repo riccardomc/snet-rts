@@ -752,7 +752,7 @@ void SNetCloudInstantiateStatic(char *exe, int net_size)
 
   HTabCheckEnvStr("SNET_CLOUD_RUN", run);
   sprintf(raddr, "tcp://%s:%d/", hostname, opts.sport);
-  sprintf(cmd, "%s %s -- %s &", run, exe, raddr);
+  sprintf(cmd, "%s %s -- -raddr %s &", run, exe, raddr);
 
   for (i = 0 ; i < net_size ; i++) {
     system(cmd);
