@@ -46,6 +46,7 @@
 #define SNET_ZMQ_RCVHWM_V 1000
 #define SNET_ZMQ_DATATO_V 10000 //data time out
 #define SNET_ZMQ_SYNCTO_V 120000 //sync time out
+#define SNET_ZMQ_LOOKTO_V 120000 //lookup timeout
 
 typedef int (*sendfun)(zmsg_t*, int);
 
@@ -66,6 +67,7 @@ static int sndhwm = SNET_ZMQ_SNDHWM_V;
 static int rcvhwm = SNET_ZMQ_RCVHWM_V;
 static int datato = SNET_ZMQ_DATATO_V;
 static int syncto = SNET_ZMQ_SYNCTO_V;
+static int lookto = SNET_ZMQ_LOOKTO_V;
 
 /*
 * Host Items
@@ -400,6 +402,7 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   HTabCheckEnvInt("SNET_ZMQ_RCVHWM", &rcvhwm);
   HTabCheckEnvInt("SNET_ZMQ_DATATO", &datato);
   HTabCheckEnvInt("SNET_ZMQ_SYNCTO", &syncto);
+  HTabCheckEnvInt("SNET_ZMQ_LOOKTO", &lookto);
 
   //init sync and data sockets
   sockp = zsocket_new(opts.ctx, ZMQ_REP);
@@ -629,13 +632,15 @@ htab_host_t *SNetDistribZMQHTabLookUp(int index)
 int SNetDistribZMQConnect(int index)
 {
   int ret = -1;
-  int retries = 100;
+  int retries = lookto >= 0 ? lookto / 100 : -1;
   int delay = 100;
   htab_host_t *host;
 
   while (true) {
     host = SNetDistribZMQHTabLookUp(index);
-    if ((host == NULL) && --retries) {
+    //if retries == -1 we want it to loop forever.
+    if (((host == NULL) && (retries > 0)) || retries++ == -1 ) {
+      --retries;
       zclock_sleep(delay);
     } else {
       break;
@@ -647,14 +652,14 @@ int SNetDistribZMQConnect(int index)
     sock_out[index] = zsocket_new(opts.ctx, ZMQ_PUSH);
 
     if (!sock_out[index]) {
-      //FIXME: add some error handling.
+      SNetUtilDebugFatal("ZMQDistrib Cannot create socket to node: %d", index);
     }
 
     zsocket_set_sndhwm(sock_out[index], sndhwm);
     ret = zsocket_connect(sock_out[index], "tcp://%s:%d/", host->host, host->data_port);
 
   } else {
-    //FIXME: Connection failed...
+    SNetUtilDebugFatal("ZMQDistrib Cannot connect to node: %d. Lookup failed.", index);
   }
 
   return ret;
