@@ -116,7 +116,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
   node_location = HTabNodeLocation();
 
   if (on_cloud && node_location == 0) {
-    SNetCloudInstantiateStatic(argv[0], net_size);
+    SNetCloudInstantiateStatic(argv[0], net_size - 1);
   }
 
   SNetDistribZMQHTabStart();
