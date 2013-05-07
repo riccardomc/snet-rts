@@ -11,24 +11,19 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#define HTAB_HNAME_LEN 256
-#define HTAB_ADDRN_LEN 300
-#define HTAB_MAX_HOSTS 1024
+#include "host.h"
+
+#define SNET_ZMQ_ADDRLN 300 //zmq tcp address length
+#define SNET_ZMQ_HTABLN 1024 //max host table size
 
 typedef struct {
   zctx_t *ctx;
   int sport;
   int dport;
   int node_location;
-  char raddr[300];
+  char raddr[SNET_ZMQ_ADDRLN];
 } htab_opts_t;
 
-typedef struct {
-  int data_port;
-  int sync_port;
-  char *host;
-  char *bind;
-} htab_host_t;
 
 typedef enum {
   htab_init,
@@ -41,24 +36,14 @@ typedef enum {
   htab_fail
 } htab_msg;
 
-
-/* host items */
-htab_host_t *HTabHostAlloc();
-htab_host_t *HTabHostCreate(char *host, char *bind, int data_port,
-    int sync_port);
-void HTabHostFree(htab_host_t *host);
-bool HTabHostCompare(htab_host_t *h1, htab_host_t *h2);
-
-void HTabHostPack(htab_host_t *host, void *buf);
-htab_host_t *HTabHostUnpack(void *buf);
-
 /* host table */
-int HTabAdd(htab_host_t *h);
-void HTabSet(htab_host_t *h, int index);
+int HTabAdd(snet_host_t *h);
+void HTabSet(snet_host_t *h, int index);
 int HTabRemove(int index);
-htab_host_t *HTabLookUp(int index);
+snet_host_t *HTabLookUp(int index);
 void HTabFree();
 void HTabDump();
+char *HTabGetHostName();
 
 /* threading part */
 void SNetDistribZMQHTabInit(int dport, int sport, int node_location,
@@ -66,20 +51,14 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location,
 void SNetDistribZMQHTabStart(void);
 void SNetDistribZMQHTabStop(void);
 void SNetDistribZMQHTab(void *args);
-htab_host_t *SNetDistribZMQHTabLookUp(int index);
+snet_host_t *SNetDistribZMQHTabLookUp(int index);
 int SNetDistribZMQHTabCount();
 
 /* interface */
-htab_host_t *HTabRemoteLookUp(int index);
+snet_host_t *HTabRemoteLookUp(int index);
 int HTabSend(zmsg_t *msg, int destination);
 zmsg_t *HTabRecv();
 int HTabNodeLocation(void);
 
-/* cloud */
-
-#define SNET_CLOUD_RUN_V "$SNET_DIR/bin/snet-on-cloud"
-
-void SNetCloudInstantiateStatic(char *exe, int net_size);
-
-#endif
+#endif /* DISTRIBZMQHTAB_H */
 

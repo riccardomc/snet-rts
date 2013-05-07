@@ -1,12 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <netdb.h>
 #include <string.h>
 #include <pthread.h>
 #include <threading.h>
 #include "debug.h"
 #include "htab.h"
+#include "sysutils.h"
 
 #define LIST_NAME_H IdStack
 #define LIST_TYPE_NAME_H idstack
@@ -26,7 +25,7 @@
 
 #define LIST_NAME_H Host
 #define LIST_TYPE_NAME_H host
-#define LIST_VAL_H htab_host_t*
+#define LIST_VAL_H snet_host_t*
 #include "list-template.h"
 #undef LIST_VAL_H
 #undef LIST_TYPE_NAME_H
@@ -34,8 +33,8 @@
 
 #define LIST_NAME Host
 #define LIST_TYPE_NAME host
-#define LIST_VAL htab_host_t*
-#define LIST_FREE_FUNCTION HTabHostFree
+#define LIST_VAL snet_host_t*
+#define LIST_FREE_FUNCTION SNetHostFree
 #include "list-template.c"
 #undef LIST_FREE_FUNCTION
 #undef LIST_VAL
@@ -54,9 +53,9 @@ static htab_opts_t opts;
 static bool running = true;
 static snet_idstack_list_t *idstack = NULL;
 static snet_host_list_t *hostlist = NULL;
-static htab_host_t *hostid[HTAB_MAX_HOSTS];
-static void *sock_out[HTAB_MAX_HOSTS];
-static sendfun sendfuns[HTAB_MAX_HOSTS]; //FIXME: unify these data structures?
+static snet_host_t *hostid[SNET_ZMQ_HTABLN];
+static void *sock_out[SNET_ZMQ_HTABLN];
+static sendfun sendfuns[SNET_ZMQ_HTABLN]; //FIXME: unify these data structures?
 static pthread_mutex_t htablock = PTHREAD_MUTEX_INITIALIZER; //FIXME; use zmtx?
 static void *sockp; // sync reply socket
 static void *sockq; // sync query socket
@@ -68,81 +67,6 @@ static int rcvhwm = SNET_ZMQ_RCVHWM_V;
 static int datato = SNET_ZMQ_DATATO_V;
 static int syncto = SNET_ZMQ_SYNCTO_V;
 static int lookto = SNET_ZMQ_LOOKTO_V;
-
-/*
-* Host Items
-*/
-
-htab_host_t *HTabHostAlloc()
-{
-  int i;
-  htab_host_t *host = malloc(sizeof(htab_host_t));
-  if (host) {
-    host->host = malloc(sizeof(char) * HTAB_HNAME_LEN);
-    host->bind = malloc(sizeof(char) * HTAB_HNAME_LEN);
-    for (i = 0; i < HTAB_HNAME_LEN; i++) {
-      host->host[i] = '\0';
-      host->bind[i] = '\0';
-    }
-    host->data_port = 0;
-    host->sync_port = 0;
-  }
-  return host;
-}
-
-htab_host_t *HTabHostCreate(char *host, char *bind,
-    int data_port, int sync_port)
-{
-  htab_host_t *h = HTabHostAlloc();
-  strncpy(h->host, host, HTAB_HNAME_LEN);
-  strncpy(h->bind, bind, HTAB_HNAME_LEN);
-  h->data_port = data_port;
-  h->sync_port = sync_port;
-  return h;
-}
-
-void HTabHostFree(htab_host_t *host)
-{
-  free(host->host);
-  free(host->bind);
-  free(host);
-  host = NULL;
-}
-
-bool HTabHostCompare(htab_host_t *h1, htab_host_t *h2)
-{
-  return h1->data_port == h2->data_port
-    && h1->sync_port == h2->sync_port
-    && strcmp(h1->host, h2->host) == 0
-    && strcmp(h1->bind, h2->bind) == 0;
-}
-
-void HTabHostPack(htab_host_t *host, void *buf)
-{
-  SNetDistribPack(buf, &host->data_port, sizeof(int));
-  SNetDistribPack(buf, &host->sync_port, sizeof(int));
-  SNetDistribPack(buf, host->host, HTAB_HNAME_LEN);
-  SNetDistribPack(buf, host->bind, HTAB_HNAME_LEN);
-}
-
-htab_host_t *HTabHostUnpack(void *buf) 
-{
-  htab_host_t *host = HTabHostAlloc();
-  SNetDistribUnpack(buf, &host->data_port, sizeof(int));
-  SNetDistribUnpack(buf, &host->sync_port, sizeof(int));
-  SNetDistribUnpack(buf, host->host, HTAB_HNAME_LEN);
-  SNetDistribUnpack(buf, host->bind, HTAB_HNAME_LEN);
-  return host;
-}
-
-void HTabHostDump(htab_host_t *h)
-{
-  if (h) {
-    printf("%d %d %s %s", h->data_port, h->sync_port, h->host, h->bind);
-  } else {
-    printf(". . . .");
-  }
-}
 
 /*
 * Id Stack (second level index)
@@ -190,7 +114,7 @@ void HTabInit()
   pthread_mutex_lock(&htablock);
   hostlist = SNetHostListCreate(0);
   HTabInitId();
-  for (int i = 0 ; i < HTAB_MAX_HOSTS ; i++) {
+  for (int i = 0 ; i < SNET_ZMQ_HTABLN ; i++) {
     hostid[i] = NULL;
   }
   pthread_mutex_unlock(&htablock);
@@ -202,7 +126,7 @@ void HTabFree()
   HTabDestroyId();
 }
 
-int HTabAdd(htab_host_t *h)
+int HTabAdd(snet_host_t *h)
 {
   static int index;
   pthread_mutex_lock(&htablock);
@@ -215,7 +139,7 @@ int HTabAdd(htab_host_t *h)
   return index;
 }
 
-void HTabSet(htab_host_t *h, int index)
+void HTabSet(snet_host_t *h, int index)
 {
   static int stack_index, list_index, last_id;
   stack_index = -1;
@@ -234,7 +158,7 @@ void HTabSet(htab_host_t *h, int index)
       //index not in stack, could be occupied: free it.
       list_index = SNetHostListFind(hostlist, hostid[index]);
       if (list_index >= -1) {
-        HTabHostFree(SNetHostListRemove(hostlist, list_index));
+        SNetHostFree(SNetHostListRemove(hostlist, list_index));
       }
   }
 
@@ -251,7 +175,7 @@ int HTabRemove(int index)
   if (hostid[index] != NULL) {
     list_index = SNetHostListFind(hostlist, hostid[index]);
     if (list_index >= 0) {
-      HTabHostFree(SNetHostListRemove(hostlist, list_index));
+      SNetHostFree(SNetHostListRemove(hostlist, list_index));
     }
     hostid[index] = NULL;
     HTabSetNextId(index);
@@ -260,9 +184,9 @@ int HTabRemove(int index)
   return list_index;
 }
 
-htab_host_t *HTabLookUp(int index)
+snet_host_t *HTabLookUp(int index)
 {
-  static htab_host_t *ret;
+  static snet_host_t *ret;
   pthread_mutex_lock(&htablock);
   ret = hostid[index];
   pthread_mutex_unlock(&htablock);
@@ -275,55 +199,17 @@ void HTabDump()
   printf("\n");
   for (int i = 0 ; i < 5; i++) {
     printf("%d: ", i);
-    HTabHostDump(hostid[i]);
+    SNetHostDump(hostid[i]);
     printf("\n");
   }
   printf("-\n");
   pthread_mutex_unlock(&htablock);
 }
 
-/*
-* Utils
-*/
-
-static char *HTabGetHostname()
-{
-  //FIXME: consider using getaddrinfo
-  char *hostname = malloc(sizeof(char) * 256);
-  struct hostent* host;
-
-  hostname[255] = '\0';
-  gethostname(hostname, 255);
-  host = gethostbyname(hostname);
-  strcpy(hostname, host->h_name);
-
+char *HTabGetHostName() {
   return hostname;
 }
 
-/*
-* Check if envname environment variable is set.
-*/
-static bool HTabCheckEnvInt(char *envname, int *parm)
-{
-  bool ret = false;
-  char *envval = getenv(envname);
-  if (envval != NULL) {
-    *parm = atoi(envval);
-    ret = true;
-  }
-  return ret;
-}
-
-static bool HTabCheckEnvStr(char *envname, char *parm)
-{
-  bool ret = false;
-  char *envval = getenv(envname);
-  if (envval != NULL) {
-    strncpy(parm, envval, HTAB_HNAME_LEN);
-    ret = true;
-  }
-  return ret;
-}
 
 /** 
 * Threading 
@@ -348,19 +234,19 @@ static void HTabConnect() {
   if (opts.node_location == 0) {
     zsocket_bind(sockp, "tcp://*:%d/", opts.sport);
     //Add yourself as node 0 and connect to yourself.
-    HTabAdd(HTabHostCreate(hostname, "*", opts.dport, opts.sport));
+    HTabAdd(SNetHostCreate(hostname, "*", opts.dport, opts.sport));
     zsocket_connect(sockq, "tcp://%s:%d/", hostname, opts.sport);
 
   } else {
     zframe_t *type_f = NULL;
     zframe_t *data_f = NULL;
     zmsg_t *msg = NULL;
-    htab_host_t *host;
+    snet_host_t *host;
 
     zsocket_connect(sockq, opts.raddr);
 
-    host = HTabHostCreate(hostname, "*", opts.dport, opts.sport);
-    HTabHostPack(host, &data_f);
+    host = SNetHostCreate(hostname, "*", opts.dport, opts.sport);
+    SNetHostPack(host, &data_f);
     HTabSyncSend(data_f, htab_host, sockq); //send host
 
     msg = HTabSyncRecv(sockq); //recv id
@@ -389,20 +275,20 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   opts.dport = dport;
   opts.sport = sport;
   opts.node_location = node_location;
-  strncpy(opts.raddr, raddr, HTAB_ADDRN_LEN);
+  strncpy(opts.raddr, raddr, SNET_ZMQ_ADDRLN);
  
   if (strcmp(hname, "") == 0) {
-    hostname = HTabGetHostname();
-    HTabCheckEnvStr("SNET_ZMQ_HOSTNM", hostname);
+    hostname = SNetUtilSysHostname();
+    SNetUtilSysEnvStr("SNET_ZMQ_HOSTNM", hostname, SNET_ZMQ_HOSTLN);
   } else {
     hostname = hname;
   }
 
-  HTabCheckEnvInt("SNET_ZMQ_SNDHWM", &sndhwm);
-  HTabCheckEnvInt("SNET_ZMQ_RCVHWM", &rcvhwm);
-  HTabCheckEnvInt("SNET_ZMQ_DATATO", &datato);
-  HTabCheckEnvInt("SNET_ZMQ_SYNCTO", &syncto);
-  HTabCheckEnvInt("SNET_ZMQ_LOOKTO", &lookto);
+  SNetUtilSysEnvInt("SNET_ZMQ_SNDHWM", &sndhwm);
+  SNetUtilSysEnvInt("SNET_ZMQ_RCVHWM", &rcvhwm);
+  SNetUtilSysEnvInt("SNET_ZMQ_DATATO", &datato);
+  SNetUtilSysEnvInt("SNET_ZMQ_SYNCTO", &syncto);
+  SNetUtilSysEnvInt("SNET_ZMQ_LOOKTO", &lookto);
 
   //init sync and data sockets
   sockp = zsocket_new(opts.ctx, ZMQ_REP);
@@ -412,7 +298,7 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   zsocket_set_rcvtimeo(sockq, syncto);
   zsocket_set_sndtimeo(sockq, syncto);
 
-  for (int i = 0 ; i < HTAB_MAX_HOSTS ; i++) {
+  for (int i = 0 ; i < SNET_ZMQ_HTABLN ; i++) {
     sock_out[i] = NULL;
     sendfuns[i] = &HTabFirstSend;
   }
@@ -460,7 +346,7 @@ static void HTabLoopRoot(void *args)
   zframe_t *reply_f = NULL;
   zmsg_t *msg = NULL;
   int id, type_v = -1, newid;
-  htab_host_t *host;
+  snet_host_t *host;
 
   while (running) {
     reply_f = NULL;
@@ -473,7 +359,7 @@ static void HTabLoopRoot(void *args)
 
     switch(type_v) {
       case htab_host:
-        host = HTabHostUnpack(&data_f);
+        host = SNetHostUnpack(&data_f);
         newid = HTabAdd(host);
         SNetDistribPack(&reply_f, &newid, sizeof(int));
         HTabSyncSend(reply_f, htab_id, sockp);
@@ -486,7 +372,7 @@ static void HTabLoopRoot(void *args)
           SNetDistribPack(&reply_f, &id, sizeof(int));
           HTabSyncSend(reply_f, htab_fail, sockp);
         } else {
-          HTabHostPack(host, &reply_f);
+          SNetHostPack(host, &reply_f);
           HTabSyncSend(reply_f, htab_host, sockp);
         }
         break;
@@ -576,6 +462,7 @@ static int HTabFirstSend(zmsg_t *msg, int dest)
 zmsg_t *HTabRecv()
 {
   zmsg_t *msg = zmsg_recv(sock_in);
+
   if (msg == NULL) {
     SNetUtilDebugFatal("ZMQDistrib DATA recv timeout: %s", strerror(errno));
   }
@@ -618,9 +505,9 @@ static void HTabSyncSend(zframe_t *data, int type, void *socket)
 * Local Calls
 */
 
-htab_host_t *SNetDistribZMQHTabLookUp(int index)
+snet_host_t *SNetDistribZMQHTabLookUp(int index)
 {
-  static htab_host_t *ret;
+  static snet_host_t *ret;
   ret = HTabLookUp(index);
   if (ret == NULL) {
     ret = HTabRemoteLookUp(index);
@@ -634,7 +521,7 @@ int SNetDistribZMQConnect(int index)
   int ret = -1;
   int retries = lookto >= 0 ? lookto / 100 : -1;
   int delay = 100;
-  htab_host_t *host;
+  snet_host_t *host;
 
   while (true) {
     host = SNetDistribZMQHTabLookUp(index);
@@ -668,7 +555,7 @@ int SNetDistribZMQConnect(int index)
 int SNetDistribZMQDisconnect(int index)
 {
   int ret = -1;
-  htab_host_t *host = SNetDistribZMQHTabLookUp(index);
+  snet_host_t *host = SNetDistribZMQHTabLookUp(index);
 
   if (host != NULL) {
     ret = zsocket_disconnect(sock_out[index], "tcp://%s:%d/", host->host, host->data_port);
@@ -706,14 +593,14 @@ int HTabNodeLocation()
 * Remote calls
 */
 
-htab_host_t *HTabRemoteLookUp(int index)
+snet_host_t *HTabRemoteLookUp(int index)
 {
   int type_v;
 
   zframe_t *data_f = NULL;
   zframe_t *type_f = NULL;
   zmsg_t *reply = NULL;
-  htab_host_t *newhost = NULL;
+  snet_host_t *newhost = NULL;
 
   SNetDistribPack(&data_f, &index, sizeof(int));
   HTabSyncSend(data_f, htab_lookup, sockq);
@@ -724,7 +611,7 @@ htab_host_t *HTabRemoteLookUp(int index)
     //FIXME: lookup failed, what to do?
   } else {
     data_f = zmsg_pop(reply);
-    newhost = HTabHostUnpack(&data_f);
+    newhost = SNetHostUnpack(&data_f);
     if (hostid[index] == NULL) {
       HTabSet(newhost, index);
     }
@@ -737,30 +624,3 @@ htab_host_t *HTabRemoteLookUp(int index)
   return newhost;
 }
 
-
-/*
-* Cloud
-* FIXME: refactor moving in another source file
-*/
-
-void SNetCloudInstantiateStatic(char *exe, int net_size)
-{
-  /*
-   * FIXME: This is a proof of concept.
-   * We need a more sophisticated instantiation process.
-   */
-  int i;
-
-  char run[1024] = SNET_CLOUD_RUN_V;
-  char cmd[1024];
-  char raddr[HTAB_ADDRN_LEN];
-
-  HTabCheckEnvStr("SNET_CLOUD_RUN", run);
-  sprintf(raddr, "tcp://%s:%d/", hostname, opts.sport);
-  sprintf(cmd, "%s %s -- -raddr %s &", run, exe, raddr);
-
-  for (i = 0 ; i < net_size ; i++) {
-    system(cmd);
-  }
-
-}
