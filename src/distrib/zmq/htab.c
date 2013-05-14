@@ -43,7 +43,7 @@
 
 #define SNET_ZMQ_SNDHWM_V 1000
 #define SNET_ZMQ_RCVHWM_V 1000
-#define SNET_ZMQ_DATATO_V 10000 //data time out
+#define SNET_ZMQ_DATATO_V 120000 //data time out
 #define SNET_ZMQ_SYNCTO_V 120000 //sync time out
 #define SNET_ZMQ_LOOKTO_V 120000 //lookup timeout
 

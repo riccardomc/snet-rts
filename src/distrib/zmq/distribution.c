@@ -61,7 +61,7 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
 
   if (on_cloud && node_location == 0) {
     sprintf(root_addr, "tcp://%s:%d/", root_addr, sync_port);
-    SNetCloudInstantiateStatic(argv[0], net_size - 1, root_addr);
+    SNetCloudInstantiateNetRaw(net_size - 1, argv[0], root_addr);
   }
 
   SNetDistribZMQHTabStart();

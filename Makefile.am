@@ -233,12 +233,12 @@ libdistribzmq_la_SOURCES = \
 	src/distrib/common/reference.h \
 	src/distrib/common/distribcommon.c \
 	src/distrib/common/distribcommon.h \
+	src/distrib/zmq/cloud.c \
+	src/distrib/zmq/cloud.h \
 	src/distrib/zmq/distribution.c \
 	src/distrib/zmq/transmit.c \
 	src/distrib/zmq/host.c \
 	src/distrib/zmq/host.h \
-	src/distrib/zmq/cloud.c \
-	src/distrib/zmq/cloud.h \
 	src/distrib/zmq/htab.c \
 	src/distrib/zmq/htab.h \
 	src/distrib/zmq/sysutils.h
