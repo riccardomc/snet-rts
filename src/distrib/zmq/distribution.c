@@ -44,6 +44,11 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
       sync_port = atoi(argv[i+1]);
     } else if (strcmp(argv[i], "-dport") == 0) {
       data_port = atoi(argv[i+1]);
+    } else if (strcmp(argv[i], "-node") == 0) {
+      node_location = atoi(argv[i+1]);
+      if (node_location == 0) {
+        SNetUtilDebugFatal("ZMQDistrib: -node argument cannot be 0");
+      }
     } else if (strcmp(argv[i], "-root") == 0) {
       net_size = atoi(argv[i+1]);
       node_location = 0;

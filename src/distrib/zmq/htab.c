@@ -245,6 +245,7 @@ static void HTabConnect() {
 
     zsocket_connect(sockq, opts.raddr);
 
+    SNetDistribPack(&data_f, &opts.node_location, sizeof(opts.node_location)); //request id
     host = SNetHostCreate(hostname, "*", opts.dport, opts.sport);
     SNetHostPack(host, &data_f);
     HTabSyncSend(data_f, htab_host, sockq); //send host
@@ -345,7 +346,7 @@ static void HTabLoopRoot(void *args)
   zframe_t *data_f = NULL;
   zframe_t *reply_f = NULL;
   zmsg_t *msg = NULL;
-  int id, type_v = -1, newid;
+  int id, type_v = -1;
   snet_host_t *host;
 
   while (running) {
@@ -359,9 +360,14 @@ static void HTabLoopRoot(void *args)
 
     switch(type_v) {
       case htab_host:
+        SNetDistribUnpack(&data_f, &id, sizeof(int));
         host = SNetHostUnpack(&data_f);
-        newid = HTabAdd(host);
-        SNetDistribPack(&reply_f, &newid, sizeof(int));
+        if (id > 0 && HTabLookUp(id) == NULL) {
+          //the host requested an id, and it's free
+          HTabSetNextId(id);
+        }
+        id = HTabAdd(host);
+        SNetDistribPack(&reply_f, &id, sizeof(int));
         HTabSyncSend(reply_f, htab_id, sockp);
         break;
 
@@ -523,6 +529,7 @@ int SNetDistribZMQConnect(int index)
   int delay = 100;
   snet_host_t *host;
 
+  //look up until true or timeout (lookto)
   while (true) {
     host = SNetDistribZMQHTabLookUp(index);
     //if retries == -1 we want it to loop forever.
