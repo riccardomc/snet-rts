@@ -17,8 +17,9 @@ void SNetCloudInstanceInit(snet_instance_t *instance)
   instance->state = inst_null;
 }
 
-void SNetCloudInstanceDump(snet_instance_t *i) {
-    printf("%s, %s, %s", i->cloud_id, i->public_dns, inst_state_str[i->state]);
+void SNetCloudInstanceDump(snet_instance_t *i)
+{
+  printf("%s, %s, %s", i->cloud_id, i->public_dns, inst_state_str[i->state]);
 }
 
 snet_instance_t *SNetCloudInstanceGet(int index)
@@ -85,7 +86,8 @@ snet_inst_state SNetCloudEncodeState(char *state)
 }
 
 /*
-* Parse a comma separeted triple of the form cloud_id, public_dns, state
+* Parse a string of the form
+* Instance: cloud_id public_dns state
 */
 int SNetCloudStrtoInstance(char *csv, snet_instance_t *instance)
 {
@@ -93,13 +95,15 @@ int SNetCloudStrtoInstance(char *csv, snet_instance_t *instance)
 
   int ret;
 
-  ret = sscanf(csv, "Instance: %s %s %s", instance->cloud_id, instance->public_dns, state);
+  ret = sscanf(csv, "Instance: %s %s %s", instance->cloud_id,
+      instance->public_dns, state);
+  instance->state = SNetCloudEncodeState(state);
+
+  SNetMemFree(state);
   if(ret != 3) {
     return false;
   }
 
-  instance->state = SNetCloudEncodeState(state);
-  SNetMemFree(state);
   return true;
 }
 
@@ -133,6 +137,10 @@ char *SNetCloudPopen(char *cmd)
 
 }
 
+/*
+* Retrieve state instance at index for cloud provider
+* NON thread safe. Use SNetCloudState(index, true)
+*/
 int SNetCloudUpdateState(int index)
 {
   char cmd[SNET_CLOUD_CMDOLN];
