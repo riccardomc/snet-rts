@@ -1,8 +1,6 @@
 #ifndef DISTRIBZMQHOST_H
 #define DISTRIBZMQHOST_H
 
-#include "bool.h"
-
 #define SNET_ZMQ_HOSTLN 256 //hostname length
 
 typedef struct {

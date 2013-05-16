@@ -11,6 +11,8 @@
 #include "debug.h"
 #include "distribcommon.h"
 #include "memfun.h"
+#include "bool.h"
+#include "host.h"
 #include "htab.h"
 #include "cloud.h"
 

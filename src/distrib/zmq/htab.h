@@ -11,8 +11,6 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include "host.h"
-
 #define SNET_ZMQ_ADDRLN 300 //zmq tcp address length
 #define SNET_ZMQ_HTABLN 1024 //max host table size
 
