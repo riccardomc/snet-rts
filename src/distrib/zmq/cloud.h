@@ -5,7 +5,7 @@
 #define SNET_CLOUD_INSTLN 1024 //Length of the instances list
 #define SNET_CLOUD_STRSLN 30 //Length of the string for state and id
 #define SNET_CLOUD_CMDOLN 1024 //Length of the command string
-#define SNET_CLOUD_STATES 8 //Number of known states
+#define SNET_CLOUD_STATES 9 //Number of known states
 
 
 typedef enum {
@@ -16,6 +16,7 @@ typedef enum {
   inst_stopping,
   inst_stopped,
 
+  inst_spawning,
   inst_unkown,
   inst_null
 } snet_inst_state;
@@ -26,6 +27,7 @@ static const char inst_state_str[SNET_CLOUD_STATES][SNET_CLOUD_STRSLN] = {"pendi
   "terminated",
   "stopping",
   "stopped",
+  "spawning",
   "unkown",
   "null"};
 
@@ -36,16 +38,21 @@ typedef struct {
 } snet_instance_t;
 
 
+typedef struct {
+  char exe[SNET_CLOUD_CMDOLN];
+  char raddr[SNET_ZMQ_ADDRLN];
+} cloud_opts_t;
+
 char *SNetCloudPopen(char *cmd);
 
-void SNetCloudInit();
+void SNetCloudInit(char *exe, char *raddr);
 int SNetCloudInstantiate(int index);
 snet_instance_t *SNetCloudInstanceGet(int index);
 int SNetCloudStrtoInstance(char *csv, snet_instance_t *instance);
 int SNetCloudTerminate(int index);
-int SNetCloudCopy(int index, char *exe);
-int SNetCloudRun(int index, char *exe, char *args);
-int SNetCloudSpawn(int index, char *exe, char *raddr);
+int SNetCloudCopy(int index);
+int SNetCloudRun(int index);
+int SNetCloudSpawn(int index);
 snet_inst_state SNetCloudState(int index, bool update);
 int SNetCloudPollState(int index, snet_inst_state state);
 
@@ -54,7 +61,7 @@ void SNetCloudDump();
 int SNetCloudId(char *cloud_id);
 char *SNetCloudHostToId(char *host);
 
-int SNetCloudInstantiateNetRaw(int net_size, char *exe, char *raddr);
-int SNetCloudInstantiateRaw(int index, char *exe, char *raddr);
+int SNetCloudInstantiateNetRaw(int net_size);
+int SNetCloudInstantiateRaw(int index);
 
 #endif /* DISTRIBZMQCLOUD_H */

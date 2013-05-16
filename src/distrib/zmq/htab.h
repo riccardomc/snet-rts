@@ -20,6 +20,7 @@ typedef struct {
   int dport;
   int node_location;
   char raddr[SNET_ZMQ_ADDRLN];
+  bool on_cloud;
 } htab_opts_t;
 
 
@@ -45,7 +46,7 @@ char *HTabGetHostName();
 
 /* threading part */
 void SNetDistribZMQHTabInit(int dport, int sport, int node_location,
-    char *raddr, char *hname);
+    char *raddr, char *hname, bool on_cloud);
 void SNetDistribZMQHTabStart(void);
 void SNetDistribZMQHTabStop(void);
 void SNetDistribZMQHTab(void *args);

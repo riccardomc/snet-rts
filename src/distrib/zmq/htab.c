@@ -266,7 +266,7 @@ static void HTabConnect()
  }
 }
 
-void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr, char*hname)
+void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr, char *hname, bool on_cloud)
 {
   opts.ctx = zctx_new();
 
@@ -288,6 +288,8 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
   } else {
     hostname = hname;
   }
+
+  opts.on_cloud = on_cloud;
 
   SNetUtilSysEnvInt("SNET_ZMQ_SNDHWM", &sndhwm);
   SNetUtilSysEnvInt("SNET_ZMQ_RCVHWM", &rcvhwm);
@@ -381,6 +383,9 @@ static void HTabLoopRoot(void *args)
         if (host == NULL) {
           SNetDistribPack(&reply_f, &id, sizeof(int));
           HTabSyncSend(reply_f, htab_fail, sockp);
+          if (opts.on_cloud) {
+            SNetCloudSpawn(id);
+          }
         } else {
           SNetHostPack(host, &reply_f);
           HTabSyncSend(reply_f, htab_host, sockp);
@@ -430,6 +435,7 @@ void SNetDistribZMQHTab(void *args)
 
   free(hostname);
   HTabFree();
+  zctx_destroy(&opts.ctx);
   pthread_mutex_destroy(&htablock);
 
 }
