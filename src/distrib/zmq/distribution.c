@@ -63,12 +63,14 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
     SNetUtilDebugFatal("ZMQDistrib: <[-root <net_size>] | [-raddr <root_addr]>");
   }
 
-  SNetDistribZMQHTabInit(data_port, sync_port, node_location, root_addr, host_name);
+  SNetDistribZMQHTabInit(data_port, sync_port, node_location, root_addr,
+      host_name, on_cloud);
   node_location = HTabNodeLocation();
 
   if (on_cloud && node_location == 0) {
-    sprintf(root_addr, "tcp://%s:%d/", root_addr, sync_port);
-    SNetCloudInstantiateNetRaw(net_size - 1, argv[0], root_addr);
+    sprintf(root_addr, "tcp://%s:%d/", HTabGetHostName(), sync_port);
+    SNetCloudInit(argv[0], root_addr);
+    //SNetCloudInstantiateNetRaw(net_size - 1);
   }
 
   SNetDistribZMQHTabStart();
