@@ -1,6 +1,8 @@
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include "bool.h"
 #include "host.h"
-#include "htab.h"
 #include "distribution.h"
 
 snet_host_t *SNetHostAlloc()

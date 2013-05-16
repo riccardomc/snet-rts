@@ -1,5 +1,8 @@
 #include <stdio.h>
 #include <sys/wait.h>
+#include "bool.h"
+#include "host.h"
+#include "htab.h"
 #include "cloud.h"
 #include "sysutils.h"
 #include "threading.h"

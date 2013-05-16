@@ -4,7 +4,9 @@
 #include <pthread.h>
 #include <threading.h>
 #include "debug.h"
+#include "host.h"
 #include "htab.h"
+#include "cloud.h"
 #include "sysutils.h"
 
 #define LIST_NAME_H IdStack

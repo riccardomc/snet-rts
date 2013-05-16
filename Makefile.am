@@ -241,7 +241,8 @@ libdistribzmq_la_SOURCES = \
 	src/distrib/zmq/host.h \
 	src/distrib/zmq/htab.c \
 	src/distrib/zmq/htab.h \
-	src/distrib/zmq/sysutils.h
+	src/distrib/zmq/sysutils.h \
+	src/distrib/zmq/sysutils.c
 libdistribzmq_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/zmq \

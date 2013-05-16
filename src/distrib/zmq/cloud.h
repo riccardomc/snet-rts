@@ -1,8 +1,6 @@
 #ifndef DISTRIBZMQCLOUD_H
 #define DISTRIBZMQCLOUD_H
 
-#include "host.h"
-
 #define SNET_CLOUD_RUN_V "$SNET_DIR/bin/snet-on-cloud" //path to cloud management script
 #define SNET_CLOUD_INSTLN 1024 //Length of the instances list
 #define SNET_CLOUD_STRSLN 30 //Length of the string for state and id
