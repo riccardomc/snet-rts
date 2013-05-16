@@ -208,7 +208,8 @@ void HTabDump()
   pthread_mutex_unlock(&htablock);
 }
 
-char *HTabGetHostName() {
+char *HTabGetHostName()
+{
   return hostname;
 }
 
@@ -217,12 +218,12 @@ char *HTabGetHostName() {
 * Threading 
 */
 
-
 static int HTabFirstSend(zmsg_t *msg, int dest); //FIXME: make compiler happy
 static void HTabSyncSend(zframe_t *data, int type, void *socket);
 static zmsg_t *HTabSyncRecv(void *socket);
 
-static void HTabPart() {
+static void HTabPart()
+{
   zframe_t *data_f = NULL;
   zmsg_t *msg = NULL;
 
@@ -232,7 +233,8 @@ static void HTabPart() {
   zmsg_destroy(&msg);
 }
 
-static void HTabConnect() {
+static void HTabConnect()
+{
   if (opts.node_location == 0) {
     zsocket_bind(sockp, "tcp://*:%d/", opts.sport);
     //Add yourself as node 0 and connect to yourself.
