@@ -329,7 +329,7 @@ int SNetCloudRun(int index)
     return false;
   }
 
-  sprintf(cmd, "%s -v -i %s -R %s -- -node %d -raddr %s",
+  sprintf(cmd, "%s -q -i %s -R %s -- -node %d -raddr %s",
       runner, i->cloud_id, opts.exe, index, opts.raddr);
 
   status = system(cmd);
@@ -360,7 +360,7 @@ int SNetCloudInstantiateRaw(int index)
   char cmd[SNET_CLOUD_CMDOLN];
   int status;
 
-  sprintf(cmd, "%s -v -I -C -R -T %s -- -node %d -raddr %s &",
+  sprintf(cmd, "%s -q -I -C -R -T %s -- -node %d -raddr %s &",
       runner, opts.exe, index, opts.raddr);
 
   status = system(cmd);
