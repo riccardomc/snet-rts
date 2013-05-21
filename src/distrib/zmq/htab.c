@@ -266,7 +266,7 @@ static void HTabConnect()
  }
 }
 
-void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr, char *hname, bool on_cloud)
+void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr, char *hname, int on_cloud)
 {
   opts.ctx = zctx_new();
 
@@ -383,7 +383,7 @@ static void HTabLoopRoot(void *args)
         if (host == NULL) {
           SNetDistribPack(&reply_f, &id, sizeof(int));
           HTabSyncSend(reply_f, htab_fail, sockp);
-          if (opts.on_cloud) {
+          if (opts.on_cloud == 2) {
             SNetCloudSpawn(id);
           }
         } else {
