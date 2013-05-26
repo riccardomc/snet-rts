@@ -247,6 +247,7 @@ libdistribzmq_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/zmq \
 	-I$(srcdir)/src/distrib/common
+dist_bin_SCRIPTS = $(srcdir)/src/distrib/zmq/snet-on-cloud
 endif
 
 # common flags

@@ -1,0 +1,293 @@
+#!/usr/bin/env python
+#
+
+import os
+import time
+import boto
+import boto.ec2
+import subprocess
+import shlex
+import sys
+from optparse import OptionParser, OptionGroup
+
+def parse_options():
+  usage = "usage: %prog [OPTIONS] [EXE [-- [ARGS]]"
+  parser = OptionParser(usage=usage)
+
+  parser.add_option("-v", "--verbose", action="store_true",
+    dest="verbose", default=False,
+    help="verbose output")
+
+  parser.add_option("-q", "--quiet", action="store_true",
+    dest="quiet", default=False,
+    help="do not generate any output. Ignored if -v is specified")
+ 
+  parser.add_option("-i", "--id", action="store",
+    type="string", dest="instance_id",
+    default="",
+    help="ID of the target instance")
+
+  awsopts = OptionGroup(parser, "AWS options", "Amazon Web Services related options")
+
+  awsopts.add_option("-g", "--region", action="store",
+    type="string", dest="region",
+    default="eu-west-1",
+    help="AWS region in which the instance will be started")
+
+  awsopts.add_option("-a", "--ami", action="store",
+    type="string", dest="ami",
+    default="ami-4d7e6f39",
+    help="AMI id of the S-Net enabled image")
+
+  awsopts.add_option("-p", "--key-pair", action="store",
+    type="string", dest="key_pair",
+    default="snetdev",
+    help="AWS key pair to use. Must match SSH KEY")
+
+  awsopts.add_option("-s", "--security-group", action="store",
+    type="string", dest="sec_group",
+    default="unsafe",
+    help="AWS security group in which the instance will be placed")
+
+  awsopts.add_option("-t", "--type", action="store",
+    type="string", dest="inst_type",
+    default="t1.micro",
+    help="AWS type of the instances")
+
+  sshopts = OptionGroup(parser, "SSH options", "Secure Shell related options")
+    
+  sshopts.add_option("-u", "--username", action="store",
+    type="string", dest="username",
+    default="ubuntu",
+    help="username that will execute EXE on the instance")
+
+  sshopts.add_option("-k", "--key", action="store",
+    type="string", dest="key",
+    default=os.path.expanduser("~/.ssh/snetdev.pem"),
+    help="SSH key to use to access the instances")
+  
+  sshopts.add_option("-r", "--remote-dir", action="store",
+    type="string", dest="remote_dir",
+    default="/tmp",
+    help="remote dir where the EXE binary will be copied")
+  
+  actions = OptionGroup(parser, "Actions", "Actions to perform. If more than one "
+      "action is specified, the execution order follows the one in this help")
+
+  actions.add_option("-I", "--instantiate", action="store_true",
+      dest="instantiate", default=False,
+      help="instantiate a new instance.  Output: aws_id,public_dns,state | 1")
+
+  actions.add_option("-S", "--state", action="store_true",
+      dest="state", default=False,
+      help="retrieve the state of instance ID. Output: state | 1")
+
+  actions.add_option("-C", "--copy", action="store_true",
+      dest="copy", default=False,
+      help="copy executable on REMOTE_DIR of instance ID. Output: 0 | 1")
+
+  actions.add_option("-R", "--run", action="store_true",
+      dest="run", default=False,
+      help="run executable in REMOTE_DIR of instance ID. Output: 0 | 1")
+
+  actions.add_option("-T", "--terminate", action="store_true",
+      dest="terminate", default=False,
+      help="terminate instance ID.  Output: 0 | 1")
+
+  parser.add_option_group(awsopts)
+  parser.add_option_group(sshopts)
+  parser.add_option_group(actions)
+
+  return parser.parse_args()
+
+def verbose_print(*args):
+  for arg in args:
+    print arg,
+
+def fatal_error(*args):
+  return_value = 1
+  print_info("ERROR:", *args)
+  print_return(return_value)
+  sys.exit(return_value)
+
+def connect(region = "eu-west-1"):
+  print_info("Connecting to cloud provider...")
+  try:
+    connection = boto.ec2.connect_to_region(options.region)
+  except:
+    fatal_error("check credentials or connectivity\n")
+  print_info("OK\n")
+
+  return connection
+
+def poll_state(instance, state, attempts = 90, delay = 2):
+  """ 
+  Polls the state of the instance until timeout or it becames True.
+
+  @return On success: True
+          On timeout: False
+          On Error: None (if the instance doesn't exist)
+  """
+  instance_state = instance.update(validate = True)
+  print_info("Polling", instance.id, "for state", state,
+      "for", (attempts * delay),"seconds :", instance_state, "\n")
+  for i in range(1, attempts + 1):
+    instance_state = instance.update(validate = True)
+    if instance_state != state:
+      time.sleep(2)
+    else:
+      break
+
+  if instance_state != state:
+    fatal_error("instance", instance.id, "timed out for state", state, "\n")
+
+  return True
+
+def get_instance(connection, instance_id):
+  try:
+    reservation = connection.get_all_instances([instance_id]);
+    instance = reservation[0].instances[0]
+  except:
+    instance = None
+  
+  if not instance:
+    fatal_error("Cannot retrieve instance", instance_id, '\n')
+
+  return instance
+
+def instantiate(connection, ami,
+    key_pair = None, inst_type = None, sec_group = None):
+  reservation = connection.run_instances(ami,
+      key_name = key_pair,
+      instance_type = inst_type,
+      security_groups = [sec_group])
+  instance = reservation.instances[0]
+
+  return instance
+
+def execute(cmd, attempts = 10, delay = 2, verbose = False):
+
+  if verbose:
+    out = None
+  else:
+    out = open(os.devnull, 'wb')
+
+  for i in range(1, attempts + 1):
+    print_info("Execution attempt", i, "of", attempts, "\n")
+    ret = subprocess.call(cmd, stdout = out, stderr = out)
+    if ret == 0:
+      return ret
+    else:
+      time.sleep(delay)
+  
+  print_info("Execution failed\n")
+
+  return ret
+
+def ssh_copy(username, key, host, remote_dir, exe, args = "", verbose = False):
+
+  scp = ['/usr/bin/scp',
+      '-o',
+      'StrictHostKeyChecking no',
+      '-i',
+      key,
+      exe,
+      username + '@' + host + ":" + remote_dir]
+
+  print_info("Copying executable\n")
+
+  return execute(scp, verbose = verbose)
+
+def ssh_run(username, key, host, remote_dir, exe, args = "", verbose = False):
+
+  run = ['/usr/bin/ssh',
+      '-o',
+      'StrictHostKeyChecking no',
+      '-i',
+      key,
+      username + '@' + host,
+      os.path.join(remote_dir, os.path.basename(exe))] + args
+
+  print_info("Running executable\n")
+  
+  return execute(run, verbose = verbose)
+
+def ssh_run_snet(username, key, host, remote_dir, exe, args = "", verbose = False):
+  return ssh_run(username, key, host, remote_dir, exe, ['-hostn', host] + args,
+      verbose = verbose)
+
+if __name__ == "__main__":
+
+  (options, args) = parse_options()
+
+  if options.verbose:
+    print_info = verbose_print
+    print_return = verbose_print
+  elif not options.quiet:
+    print_return = verbose_print
+    print_info = lambda *a: None
+  else:
+    print_return = lambda *a: None
+    print_info = lambda *a: None
+
+  if options.copy or options.run:
+    try:
+      executable = args[0]
+      exe_args = args[1:]
+    except:
+      fatal_error("-C and -R require EXE\n")
+
+  output = '\n'
+
+  connection = connect(region = options.region)
+  instance_id = options.instance_id
+  instance = None
+
+  if instance_id != "":
+    options.instantiate = False;
+    instance = get_instance(connection, instance_id)
+  elif not options.instantiate:
+    fatal_error("Option -I or -i <ID> required\n")
+  else:
+    print_info("Starting new instance\n")
+    instance = instantiate(connection, options.ami,
+        key_pair = options.key_pair,
+        inst_type = options.inst_type,
+        sec_group = options.sec_group)
+    instance_id = instance.id
+
+  if instance.state == "pending":
+    poll_state(instance, "running")
+  elif instance.state == "running":
+    pass
+  else:
+    fatal_error("Instance is not running\n")
+
+  output = "Instance: " + instance.id + ' ' + instance.public_dns_name + ' ' + instance.state
+
+  if options.state:
+    print_info("Retrieving state\n")
+    output = instance.state
+
+  if options.copy:
+    output = ssh_copy(options.username, options.key,
+        instance.public_dns_name, options.remote_dir,
+        executable, verbose = options.verbose)
+    if output != 0:
+      fatal_error("Copy failed\n")
+
+  if options.run:
+    output = ssh_run_snet(options.username, options.key,
+        instance.public_dns_name, options.remote_dir,
+        executable, exe_args, verbose = options.verbose)
+    if output != 0:
+      fatal_error("Run failed\n")
+
+  if options.terminate:
+    print_info("Terminating instance\n")
+    instance.terminate()
+    output = 0
+
+  print_return(output)
+  sys.exit(0)
+
