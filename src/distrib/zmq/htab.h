@@ -11,29 +11,49 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#define SNET_ZMQ_ADDRLN 300 //zmq tcp address length
-#define SNET_ZMQ_HTABLN 1024 //max host table size
+#define SNET_ZMQ_ADDRLN 300        //zmq tcp address length
+#define SNET_ZMQ_HTABLN 1024       //max host table size
+
+/* default values */
+#define SNET_ZMQ_SEND_HIGHWM_D 1000   //send high water mark (number of msgs)
+#define SNET_ZMQ_RECV_HIGHWM_D 1000   //recv high water mark (number of msgs)
+#define SNET_ZMQ_DATA_TIMEO_D  120000 //data time out (milliseconds)
+#define SNET_ZMQ_SYNC_TIMEO_D  120000 //sync time out (milliseconds)
+#define SNET_ZMQ_LOOK_TIMEO_D  120000 //lookup timeout (milliseconds)
 
 typedef struct {
   zctx_t *ctx;
-  int sport;
-  int dport;
+  int sync_port;
+  int data_port;
   int node_location;
-  char raddr[SNET_ZMQ_ADDRLN];
+  char *host_name;
+  char root_addr[SNET_ZMQ_ADDRLN];
   int on_cloud;
 } htab_opts_t;
 
+typedef struct {
+  void *request;              // sync request socket
+  void *reply;                // sync reply socket
+  void *in;                   // data incoming socket
+  void *out[SNET_ZMQ_HTABLN]; // data outgoing sockets (one per node)
+                              /* socket options */
+  int send_highwm;            //ZMQ send high watermark (see ZMQ docs)
+  int recv_highwm;            //ZMQ receive high watermark
+  int sync_timeo;             //synchronization sockets timeout (milliseconds)
+  int data_timeo;             //data sockets timeout (milliseconds)
+  int look_timeo;             //host lookup timeout (milliseconds)
+} htab_sockets_t;
 
+/* synchronization messages types */
 typedef enum {
-  htab_init,
-
-  htab_host,
-  htab_id,
-  htab_part,
-
-  htab_lookup,
-  htab_fail
+  htab_host,    //host joins or look up reply
+  htab_id,      //reply to joining host or look up request
+  htab_part,    //an host parts the network
+  htab_fail     //look up reply failure
 } htab_msg;
+
+/* send function prototype */
+typedef int (*sendfun)(zmsg_t*, int);
 
 /* host table */
 int HTabAdd(snet_host_t *h);

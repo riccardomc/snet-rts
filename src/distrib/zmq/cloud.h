@@ -1,11 +1,11 @@
 #ifndef DISTRIBZMQCLOUD_H
 #define DISTRIBZMQCLOUD_H
 
-#define SNET_CLOUD_RUN_V "$SNET_DIR/bin/snet-on-cloud" //Location of the script for static instantiation
-#define SNET_CLOUD_INSTLN 1024 //Length of the instances list
-#define SNET_CLOUD_STRSLN 30 //Length of the string for state and id
-#define SNET_CLOUD_CMDOLN 1024 //Length of the command string
-#define SNET_CLOUD_STATES 9 //Number of known states
+#define SNET_CLOUD_SCRIPT_D "$SNET_DIR/bin/snet-on-cloud" //Location of the script for static instantiation
+#define SNET_CLOUD_INSTLN 1024  //Length of the instances list
+#define SNET_CLOUD_STRSLN 30    //Length of the string for state and id
+#define SNET_CLOUD_CMDOLN 1024  //Length of the command string
+#define SNET_CLOUD_STATES 9     //Number of known states
 
 
 typedef enum {
@@ -37,10 +37,10 @@ typedef struct {
   snet_inst_state state;
 } snet_instance_t;
 
-
 typedef struct {
+  char script[SNET_CLOUD_CMDOLN];
   char exe[SNET_CLOUD_CMDOLN];
-  char raddr[SNET_ZMQ_ADDRLN];
+  char root_addr[SNET_ZMQ_ADDRLN];
 } cloud_opts_t;
 
 char *SNetCloudPopen(char *cmd);

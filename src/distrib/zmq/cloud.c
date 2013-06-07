@@ -7,9 +7,8 @@
 #include "sysutils.h"
 #include "threading.h"
 
-static snet_instance_t instances[SNET_CLOUD_INSTLN];
-static char runner[SNET_CLOUD_CMDOLN] = SNET_CLOUD_RUN_V;
 static cloud_opts_t opts;
+static snet_instance_t instances[SNET_CLOUD_INSTLN];
 static zmutex_t *instances_mtx;
 
 void SNetCloudInstanceInit(snet_instance_t *instance)
@@ -39,10 +38,11 @@ void SNetCloudInit(char *exe, char *raddr)
 {
   int i;
 
+  strncpy(opts.script, SNET_CLOUD_SCRIPT_D, SNET_CLOUD_CMDOLN);
   strncpy(opts.exe, exe, SNET_CLOUD_CMDOLN);
-  strncpy(opts.raddr, raddr, SNET_ZMQ_ADDRLN);
+  strncpy(opts.root_addr, raddr, SNET_ZMQ_ADDRLN);
 
-  SNetUtilSysEnvStr("SNET_CLOUD_RUN", runner, SNET_CLOUD_CMDOLN);
+  SNetUtilSysEnvStr("SNET_CLOUD_SCRIPT", opts.script, SNET_CLOUD_CMDOLN);
 
   instances_mtx = zmutex_new();
 
@@ -168,7 +168,7 @@ int SNetCloudUpdateState(int index)
     return ret;
   }
 
-  sprintf(cmd, "%s -i %s -S" , runner, i->cloud_id);
+  sprintf(cmd, "%s -i %s -S" , opts.script, i->cloud_id);
 
   output = SNetCloudPopen(cmd);
   if (output == NULL) {
@@ -226,7 +226,7 @@ int SNetCloudInstantiate(int index)
   }
   zmutex_unlock(instances_mtx);
 
-  sprintf(cmd, "%s -I" , runner);
+  sprintf(cmd, "%s -I" , opts.script);
 
   output = SNetCloudPopen(cmd);
   if (output == NULL) {
@@ -269,7 +269,7 @@ int SNetCloudTerminate(int index)
   }
   zmutex_unlock(instances_mtx);
 
-  sprintf(cmd, "%s -i %s -T" , runner, i->cloud_id);
+  sprintf(cmd, "%s -i %s -T" , opts.script, i->cloud_id);
 
   output = SNetCloudPopen(cmd);
   if (output == NULL) {
@@ -303,7 +303,7 @@ int SNetCloudCopy(int index)
     return false;
   }
 
-  sprintf(cmd, "%s -q -i %s -C %s" , runner, i->cloud_id, opts.exe);
+  sprintf(cmd, "%s -q -i %s -C %s" , opts.script, i->cloud_id, opts.exe);
 
   status = system(cmd);
   if (status == -1 || WEXITSTATUS(status) > 0) {
@@ -330,7 +330,7 @@ int SNetCloudRun(int index)
   }
 
   sprintf(cmd, "%s -q -i %s -R %s -- -node %d -raddr %s",
-      runner, i->cloud_id, opts.exe, index, opts.raddr);
+      opts.script, i->cloud_id, opts.exe, index, opts.root_addr);
 
   status = system(cmd);
   if (status == -1 || WEXITSTATUS(status) > 0) {
@@ -361,7 +361,7 @@ int SNetCloudInstantiateRaw(int index)
   int status;
 
   sprintf(cmd, "%s -q -I -C -R -T %s -- -node %d -raddr %s &",
-      runner, opts.exe, index, opts.raddr);
+      opts.script, opts.exe, index, opts.root_addr);
 
   status = system(cmd);
   if (status == -1 || WEXITSTATUS(status) > 0) {

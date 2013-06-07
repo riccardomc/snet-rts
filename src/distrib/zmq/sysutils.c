@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -22,13 +23,12 @@ char *SNetUtilSysHostname()
 
 bool SNetUtilSysEnvInt(char *envname, int *parm)
 {
-  bool ret = false;
+  int ret = -1;
   char *envval = getenv(envname);
   if (envval != NULL) {
-    *parm = atoi(envval);
-    ret = true;
+    ret = sscanf(envval, "%d", parm);
   }
-  return ret;
+  return ret > 0;
 }
 
 bool SNetUtilSysEnvStr(char *envname, char *parm, size_t size)

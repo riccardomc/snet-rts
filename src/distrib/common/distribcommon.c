@@ -8,8 +8,6 @@
 #include "reference.h"
 #include "snetentities.h"
 
-#define SNET_DBG_TIMING
-
 #ifdef SNET_DBG_TIMING
 #include <time.h>
 #include <sys/time.h>

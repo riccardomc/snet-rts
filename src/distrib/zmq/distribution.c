@@ -38,25 +38,25 @@ void SNetDistribZMQHostsInit(int argc, char **argv)
 
 
   for (i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-raddr") == 0) {
+    if (strcmp(argv[i], "-raddr") == 0) { //root node address (tcp://host:port/)
       strncpy(root_addr, argv[i+1], SNET_ZMQ_HOSTLN);
-    } else if (strcmp(argv[i], "-hostn") == 0) {
+    } else if (strcmp(argv[i], "-hostn") == 0) { //force local hostname
       strncpy(host_name, argv[i+1], SNET_ZMQ_HOSTLN);
-    } else if (strcmp(argv[i], "-sport") == 0) {
+    } else if (strcmp(argv[i], "-sport") == 0) { //synchronization port
       sync_port = atoi(argv[i+1]);
-    } else if (strcmp(argv[i], "-dport") == 0) {
+    } else if (strcmp(argv[i], "-dport") == 0) { //data port
       data_port = atoi(argv[i+1]);
-    } else if (strcmp(argv[i], "-node") == 0) {
+    } else if (strcmp(argv[i], "-node") == 0) { //try to set snet node id
       node_location = atoi(argv[i+1]);
       if (node_location == 0) {
         SNetUtilDebugFatal("ZMQDistrib: -node argument cannot be 0");
       }
-    } else if (strcmp(argv[i], "-root") == 0) {
+    } else if (strcmp(argv[i], "-root") == 0) { //be root node of network of size as param
       net_size = atoi(argv[i+1]);
       node_location = 0;
-    } else if (strcmp(argv[i], "-cloud-static") == 0) {
+    } else if (strcmp(argv[i], "-cloud-static") == 0) { //use static cloud instantiation
       on_cloud = 1;
-    } else if (strcmp(argv[i], "-cloud-dynamic") == 0) {
+    } else if (strcmp(argv[i], "-cloud-dynamic") == 0) { //use dynamic cloud instantiation
       on_cloud = 2;
     }
 
