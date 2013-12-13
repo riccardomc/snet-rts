@@ -19,8 +19,9 @@
 #include "bool.h"
 #include "record.h"
 
-// to activate/deactivate user event logging (message trace)
-#define USE_USER_EVENT_LOGGING
+// To activate/deactivate user event logging (message trace).
+// Activate this via configure, or compile_cmd, or Makefile.
+// #define USE_USER_EVENT_LOGGING
 
 
 typedef union moninfo_types snet_moninfo_types_t;
@@ -62,7 +63,6 @@ typedef char* snet_add_moninfo_rec_data_t;
 /* data structure of monitoring information for records */
 typedef struct {
 	snet_record_id_t id;
-	//snet_recid_list_t *parent_ids;
 	snet_add_moninfo_rec_data_t add_moninfo_rec_data; /* container for additional arbitrary data */
 } snet_moninfo_record_t;
 
@@ -106,5 +106,11 @@ snet_add_moninfo_rec_data_t SNetMonInfoRecCopyAdditionalData(snet_add_moninfo_re
  *  Print the monitoring information to a file
  ****************************************************************************/
 void SNetMonInfoPrint(FILE *f, snet_moninfo_t *moninfo);
+
+
+/***** Monitor record information ****/
+
+/* check if record is data or not */
+int SNetMonRecTypeData(void *item);
 
 #endif /* _MONINFO_H_ */

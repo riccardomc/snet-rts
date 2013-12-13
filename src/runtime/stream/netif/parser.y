@@ -26,6 +26,7 @@
 #include "interface.h"
 #include "memfun.h"
 #include "snetentities.h"
+#include "entities.h"
 #include "constants.h"
 #include "moninfo.h"
 #include "debug.h"
@@ -85,6 +86,9 @@
 
    /* SNetStream where all the parsed data should be written to */
    snet_stream_desc_t *output;
+
+   /* Entity in which context the parser runs */
+   snet_entity_t *ent;
  }parser;
 
  /* Data values for record currently under parsing  */
@@ -271,8 +275,9 @@ Record:       RECORD_BEGIN Attributes STARTTAG_SHORTEND
 
 #ifdef USE_USER_EVENT_LOGGING
                       /* Emit a monitoring message of a record read from input */
-                      SNetThreadingEventSignal(
-                         SNetMonInfoCreate( EV_MESSAGE_IN, MON_RECORD, current.record));
+                      SNetThreadingEventSignal( parser.ent,
+                         SNetMonInfoCreate( EV_MESSAGE_IN, MON_RECORD, current.record)
+                         );
 #endif
 
 		    }
@@ -301,10 +306,12 @@ Record:       RECORD_BEGIN Attributes STARTTAG_SHORTEND
 
 		if(parser.terminate != SNET_PARSE_ERROR) {
 		  if(current.record != NULL) {
-                    /* write record to stream */
-                    SNetStreamWrite( parser.output, current.record);
+                    if (parser.output != NULL) {
+                      /* write record to stream */
+                      SNetStreamWrite( parser.output, current.record);
+                      current.record = NULL;
+                    }
 
-		    current.record = NULL;
 		    current.interface = INTERFACE_UNKNOWN;
 		  }
 		}else {
@@ -396,14 +403,17 @@ Record:       RECORD_BEGIN Attributes STARTTAG_SHORTEND
 #ifdef USE_USER_EVENT_LOGGING
                       if(SNetRecGetDescriptor(current.record) == REC_data) {
                         /* Emit a monitoring message of a record read from input */
-                        SNetThreadingEventSignal(
-                            SNetMonInfoCreate( EV_MESSAGE_IN, MON_RECORD, current.record));
+                        SNetThreadingEventSignal( parser.ent,
+                            SNetMonInfoCreate( EV_MESSAGE_IN, MON_RECORD, current.record)
+                            );
                       }
 #endif
-                      /* write record to stream */
-                      SNetStreamWrite( parser.output, current.record);
+                      if (parser.output != NULL) {
+                        /* write record to stream */
+                        SNetStreamWrite( parser.output, current.record);
+                        current.record = NULL;
+                      }
 
-		      current.record = NULL;
 		      current.interface = INTERFACE_UNKNOWN;
 		    }
 		  }else {
@@ -414,7 +424,6 @@ Record:       RECORD_BEGIN Attributes STARTTAG_SHORTEND
 		    yyerror("Error encountered while parsing a record. Record discarded (3)!");
 		    parser.terminate = SNET_PARSE_CONTINUE;
 		  }
-		  current.record = NULL;
 		}
 
 		deleteAttributes($2);
@@ -503,8 +512,8 @@ Field:    FIELD_BEGIN Attributes STARTTAG_SHORTEND
 	
 	    if(iid != INTERFACE_UNKNOWN) {
 	
-        if(current.mode == MODE_TEXTUAL) {
-          data = SNetInterfaceGet(iid)->deserialisefun(yyin);
+              if (current.mode == MODE_TEXTUAL) {
+                data = SNetInterfaceGet(iid)->deserialisefun(yyin);
 	      } else if(current.mode == MODE_BINARY) {
 		        data = SNetInterfaceGet(iid)->decodefun(yyin);
 	      } else {
@@ -702,7 +711,7 @@ Attributes:   NAME EQ SQUOTE SATTVAL SQUOTE Attributes
               }
 %%
 
-static void parserflush()
+static void parserflush(void)
 {
   if(current.record != NULL) {
     SNetRecDestroy(current.record);
@@ -734,18 +743,19 @@ void yyerror(char *error)
 void SNetInParserInit(FILE *file,
 		      snetin_label_t *labels,
 		      snetin_interface_t *interfaces,
-                      snet_stream_desc_t *output
-                      )
+                      snet_stream_desc_t *output,
+                      snet_entity_t *ent)
 {
   yyin = file;
   parser.labels = labels;
   parser.interface = interfaces;
   parser.output = output;
+  parser.ent = ent;
 
   parser.terminate = SNET_PARSE_CONTINUE;
 }
 
-int SNetInParserParse()
+int SNetInParserParse(void)
 {
   parserflush();
 
@@ -756,7 +766,21 @@ int SNetInParserParse()
   return parser.terminate;
 }
 
-void SNetInParserDestroy()
+int SNetInParserGetNextRecord(snet_record_t **record)
+{
+  parserflush();
+
+  *record = NULL;
+  if (parser.terminate == SNET_PARSE_CONTINUE) {
+    yyparse();
+    *record = current.record;
+    current.record = NULL;
+  }
+
+  return parser.terminate;
+}
+
+void SNetInParserDestroy(void)
 {
   yylex_destroy();
 }

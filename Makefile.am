@@ -3,19 +3,21 @@ SUBDIRS = . src/interfaces/sac4snet
 
 # stuff that gets installed
 snetstuffdir = $(pkglibdir)
-snetstuff_DATA = \
-	compile_cmd link_cmd
 
-pkgdata_DATA =\
+pkgdata_DATA = \
 	src/snet.mkf \
 	snet-config.mkf
 
+EXTRA_DIST = src/snet.mkf
+
 snetstuff_SCRIPTS = \
-	libtool
+	libtool compile_cmd link_cmd
 
 pkglib_LTLIBRARIES = \
 	libsnetutil.la  \
 	libruntimestream.la \
+	libfrontrt.la \
+	libfrontnodist.la \
 	libC4SNet.la \
 	libC4SNetc.la \
 	libtbpthread.la \
@@ -30,6 +32,7 @@ pkginclude_HEADERS = \
 	include/constants.h \
 	include/debug.h \
 	include/distribution.h \
+	include/entities.h \
 	include/expression.h \
 	include/filter.h \
 	include/handle.h \
@@ -94,7 +97,9 @@ libruntimestream_la_SOURCES = \
 	src/runtime/stream/entity/box.c \
 	src/runtime/stream/entity/collector.c \
 	src/runtime/stream/entity/collector.h \
+	src/runtime/stream/entity/entities.c \
 	src/runtime/stream/entity/feedback.c \
+	src/runtime/stream/entity/feednond.c \
 	src/runtime/stream/entity/filter.c \
 	src/runtime/stream/entity/out.c \
 	src/runtime/stream/entity/parallel.c \
@@ -102,6 +107,7 @@ libruntimestream_la_SOURCES = \
 	src/runtime/stream/entity/split.c \
 	src/runtime/stream/entity/star.c \
 	src/runtime/stream/entity/syncro.c \
+	src/runtime/stream/entity/tertsrun.c \
 	src/runtime/stream/observer/observers.c \
 	src/runtime/stream/langif/interface_functions.c \
 	src/runtime/stream/netif/interface.c \
@@ -119,6 +125,87 @@ libruntimestream_la_CPPFLAGS = $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/runtime/stream/shared \
 	-I$(srcdir)/src/runtime/stream/observer \
 	-I$(srcdir)/src/runtime/stream/netif
+
+libfrontrt_la_SOURCES = \
+	src/runtime/common/expression.c \
+	src/runtime/common/info.c \
+	src/runtime/common/list.c \
+	src/runtime/common/map.c \
+	src/runtime/common/moninfo.c \
+	src/runtime/common/record.c \
+	src/runtime/common/variant.c \
+	src/runtime/stream/utils/bitmap.c \
+	src/runtime/stream/utils/bitmap.h \
+	src/runtime/stream/utils/debug.c \
+	src/runtime/stream/utils/debugcounters.c \
+	src/runtime/stream/utils/debugcounters.h \
+	src/runtime/stream/utils/debugtime.c \
+	src/runtime/stream/utils/debugtime.h \
+	src/runtime/stream/utils/hashtab.c \
+	src/runtime/stream/utils/hashtab.h \
+	src/runtime/stream/utils/locvec.c \
+	src/runtime/stream/shared/handle.c \
+	src/runtime/stream/shared/handle_p.h \
+	src/runtime/stream/entity/alias.c \
+	src/runtime/stream/entity/entities.c \
+	src/runtime/stream/entity/out.c \
+	src/runtime/stream/langif/interface_functions.c \
+	src/runtime/stream/netif/interface.c \
+	src/runtime/stream/netif/label.c \
+	src/runtime/stream/netif/networkinterface.c \
+	src/runtime/stream/netif/parserutils.h \
+	src/runtime/stream/netif/parser.y \
+	src/runtime/stream/netif/lexer.l \
+	src/runtime/front/detref.h \
+	src/runtime/front/frontrun.c \
+	src/runtime/front/node.c \
+	src/runtime/front/node.h \
+	src/runtime/front/node-proto.h \
+	src/runtime/front/trace.c \
+	src/runtime/front/trace.h \
+	src/runtime/front/xbox.c \
+	src/runtime/front/xcoll.c \
+	src/runtime/front/xdet.c \
+	src/runtime/front/xdripback.c \
+	src/runtime/front/xfeedback.c \
+	src/runtime/front/xfifo.c \
+	src/runtime/front/xfifo.h \
+	src/runtime/front/xfilter.c \
+	src/runtime/front/xgarbage.c \
+	src/runtime/front/xhashptr.c \
+	src/runtime/front/xident.c \
+	src/runtime/front/xinput.c \
+	src/runtime/front/xlanding.c \
+	src/runtime/front/xlock.h \
+	src/runtime/front/xnameshift.c \
+	src/runtime/front/xobserve.c \
+	src/runtime/front/xoutput.c \
+	src/runtime/front/xpar.c \
+	src/runtime/front/xserial.c \
+	src/runtime/front/xsplit.c \
+	src/runtime/front/xstack.c \
+	src/runtime/front/xstack.h \
+	src/runtime/front/xstar.c \
+	src/runtime/front/xstream.c \
+	src/runtime/front/xsync.c \
+	src/runtime/front/xthread.c \
+	src/runtime/front/xtostring.c \
+	src/runtime/front/xworker.c \
+	src/runtime/front/xworker.h \
+	src/runtime/front/xzipper.c
+libfrontrt_la_CPPFLAGS = $(AM_CPPFLAGS) \
+	-I$(srcdir)/src/runtime/stream/utils \
+	-I$(srcdir)/src/runtime/stream/shared \
+	-I$(srcdir)/src/runtime/stream/netif \
+	-I$(srcdir)/src/distrib/common
+
+libfrontnodist_la_SOURCES = \
+	src/distrib/common/reference.c \
+	src/runtime/front/xnodist.c
+libfrontnodist_la_CPPFLAGS = \
+        $(AM_CPPFLAGS) \
+	-I$(srcdir)/src/runtime/stream/utils \
+	-I$(srcdir)/src/distrib/common
 
 # for runtime/stream/netif
 BUILT_SOURCES = src/runtime/stream/netif/parser.h
@@ -141,12 +228,30 @@ libtblpel_la_SOURCES = \
 	src/threading/lpel/lpelmod/mon_snet.c \
 	src/threading/lpel/lpelmod/mon_snet.h \
 	src/threading/lpel/lpelif/glue_snet.c \
+	src/threading/lpel/lpelif/glue_snet.h \
+	src/threading/lpel/lpelif/glue_decen.c \
 	src/threading/lpel/lpelif/wrappers.c 
 libtblpel_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
         $(LPEL_INCLUDES) \
         -I$(srcdir)/src/threading/lpel/lpelmod
 libtblpel_la_LIBADD = $(LIBLPEL_LA)
+
+pkglib_LTLIBRARIES += libtblpel_hrc.la 
+libtblpel_hrc_la_SOURCES = \
+	src/threading/lpel/lpelmod/assign.c \
+	src/threading/lpel/lpelmod/assign.h \
+	src/threading/lpel/lpelmod/mon_snet.c \
+	src/threading/lpel/lpelmod/mon_snet.h \
+	src/threading/lpel/lpelif/glue_snet.c \
+	src/threading/lpel/lpelif/glue_snet.h \
+	src/threading/lpel/lpelif/glue_hrc.c \
+	src/threading/lpel/lpelif/wrappers.c 
+libtblpel_hrc_la_CPPFLAGS = \
+        $(AM_CPPFLAGS) \
+        $(LPEL_INCLUDES) \
+        -I$(srcdir)/src/threading/lpel/lpelmod
+libtblpel_hrc_la_LIBADD = $(LIBLPEL_HRC_LA)
 endif
 
 libC4SNet_la_SOURCES = \
@@ -175,7 +280,7 @@ libdistribnodist_la_CPPFLAGS = \
 
 
 if ENABLE_DIST_MPI
-pkglib_LTLIBRARIES += libdistribmpi.la
+pkglib_LTLIBRARIES += libdistribmpi.la libfrontmpi.la
 libdistribmpi_la_SOURCES = \
 	src/distrib/common/tuplelist.c \
 	src/distrib/common/tuplelist.h \
@@ -193,6 +298,28 @@ libdistribmpi_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/mpi \
 	-I$(srcdir)/src/distrib/common
+
+libfrontmpi_la_SOURCES = \
+	src/runtime/front/node.h \
+	src/runtime/front/node-proto.h \
+	src/runtime/front/xdistrib.c \
+	src/runtime/front/xtransfer.c \
+	src/runtime/front/xmanager.c \
+	src/runtime/front/frontmpi.c \
+	src/distrib/common/reference.h \
+	src/distrib/common/reference.c \
+	src/distrib/common/distribcommon.h \
+	src/distrib/common/distribfront.h \
+	src/distrib/mpi/distribution.c \
+	src/distrib/mpi/pack.h \
+	src/distrib/mpi/transmit.c \
+	src/runtime/stream/utils/hashtable.c \
+	src/runtime/stream/utils/hashtable.h
+libfrontmpi_la_CPPFLAGS = \
+        $(AM_CPPFLAGS) \
+	-I$(srcdir)/src/runtime/stream/utils \
+	-I$(srcdir)/src/distrib/common \
+	-I$(srcdir)/src/distrib/mpi
 endif
 
 
@@ -251,17 +378,21 @@ dist_bin_SCRIPTS = $(srcdir)/src/distrib/zmq/snet-on-cloud
 endif
 
 # common flags
-INCLUDES = -I$(top_srcdir)/include
+AM_CPPFLAGS = -I$(top_srcdir)/include
 
 compile_cmd: Makefile
 	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)echo $(SHELL) '$${SNET_LIBS}'/libtool --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile \
-	     $(CC) $(DEFS) $(AM_CPPFLAGS) -I'$${SNET_INCLUDES}' $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c >$@
+	$(AM_V_GEN)echo '#!/bin/sh' >$@ ; \
+	     echo $(SHELL) '$${SNET_LIBS}'/libtool --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile \
+	     $(CC) $(DEFS) $(AM_CPPFLAGS) -I'$${SNET_INCLUDES}' $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c '"$$@"' >>$@ ; \
+	     chmod +x $@
 
 link_cmd: Makefile
 	$(AM_V_at)rm -f $@
-	$(AM_V_GEN)echo $(SHELL) '$${SNET_LIBS}'/libtool --preserve-dup-deps --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link \
-	     $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -L'$${SNET_LIBS}' >$@
+	$(AM_V_GEN)echo '#!/bin/sh' >$@ ; \
+	     echo $(SHELL) '$${SNET_LIBS}'/libtool --preserve-dup-deps --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link \
+	     $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -L'$${SNET_LIBS}' '"$$@"' >>$@ ; \
+	     chmod +x $@
 
 snet-config.mkf: Makefile
 	$(AM_V_at)rm -f $@
@@ -270,7 +401,8 @@ snet-config.mkf: Makefile
 
 CLEANFILES = \
         compile_cmd \
-        link_cmd
+        link_cmd \
+        snet-config.mkf
 
 
 # re-generate the "libtool" script when it becomes deprecated

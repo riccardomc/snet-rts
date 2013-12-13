@@ -114,3 +114,4 @@ int SNetAssignTask(int is_box, const char *boxname)
 
   return target;
 }
+

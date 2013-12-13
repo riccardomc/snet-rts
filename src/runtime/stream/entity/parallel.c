@@ -26,18 +26,25 @@
 
 #include <assert.h>
 
-#include "ast.h"
 #include "snetentities.h"
 #include "collector.h"
 #include "memfun.h"
 #include "debug.h"
+#include "locvec.h"
 #include "distribution.h"
 #include "threading.h"
 #include "limits.h"
 
 //#define DEBUG_PRINT_GC
 
-#define ENABLE_GC_STATE
+#define ENABLE_GARBAGE_COLLECTOR
+
+typedef struct {
+  snet_stream_t *input;
+  snet_stream_t **outputs;
+  snet_variant_list_list_t *variant_lists;
+  bool is_det;
+} parallel_arg_t;
 
 typedef struct {
   bool is_match;
@@ -45,15 +52,6 @@ typedef struct {
 } match_count_t;
 
 
-typedef struct {
-  snet_stream_desc_t **outstreams, *instream;
-  snet_variant_list_list_t *variant_lists;
-  match_count_t **matchcounter;
-  bool is_det;
-  int num_init_branches;
-  int counter;
-  int *usedcounter; /* to keep track how many times the branch is used */
-} parallel_arg_t;
 
 static inline void MatchCountUpdate( match_count_t *mc, bool match_cond)
 {
@@ -68,10 +66,11 @@ static inline void MatchCountUpdate( match_count_t *mc, bool match_cond)
 static void CheckMatch( snet_record_t *rec,
     snet_variant_list_t *variant_list, match_count_t *mc)
 {
-  int name, val;
+  int name;
   snet_variant_t *variant;
   int max=-1;
-  (void) val;
+  int val;
+  (void) val; /* NOT USED */
 
   assert(rec != NULL);
   assert(variant_list != NULL);
@@ -107,7 +106,7 @@ static void CheckMatch( snet_record_t *rec,
 
 
 
-#ifdef ENABLE_GC_STATE
+#ifdef ENABLE_GARBAGE_COLLECTOR
 
 static bool VariantIsSupertypeOfAllOthers(snet_variant_t *var,
     snet_variant_list_t *variant_list)
@@ -132,8 +131,11 @@ static bool VariantIsSupertypeOfAllOthers(snet_variant_t *var,
   return true;
 }
 
-#endif /* ENABLE_GC_STATE */
+#endif /* ENABLE_GARBAGE_COLLECTOR */
 
+
+#if 0
+/* This is no longer used and can therefore be removed ? */
 
 /**
  * Using weighted round robin to decide which buffer to dispatch to:
@@ -177,6 +179,7 @@ static int WeightedRoundRobin( match_count_t **counter, int *usedcounter, int nu
   SNetMemFree( best);
   return res;
 }
+#endif
 
 /**
  * Check for "best match" and decide which buffer to dispatch to
@@ -227,251 +230,245 @@ static void PutToBuffers( snet_stream_desc_t **outstreams, int num,
   }
 }
 
-/**
- * Close outstreams and the arguments
- */
-static void TerminateParallelBoxTask( int num, parallel_arg_t *parg)
-{
-  int i;
-
-  /* close the outstreams */
-
-  for( i=0; i<num; i++) {
-    if (parg->outstreams[i] != NULL) {
-      SNetStreamClose( parg->outstreams[i], false);
-    }
-    if(parg->matchcounter != NULL && parg->matchcounter[i] != NULL){
-      SNetMemFree( parg->matchcounter[i]);
-    }
-  }
-  if(parg->matchcounter != NULL){
-    SNetMemFree( parg->matchcounter);
-  }
-  if(parg->usedcounter != NULL){
-    SNetMemFree( parg->usedcounter);
-  }
-  SNetMemFree( parg->outstreams);
-  SNetMemFree( parg);
-}
 
 /**
  * Main Parallel Box Task
  */
-static void ParallelBoxTask(void *arg)
+static void ParallelBoxTask(snet_entity_t *ent, void *arg)
 {
   parallel_arg_t *parg = (parallel_arg_t *) arg;
-
   /* the number of outputs */
   int num = SNetVariantListListLength(parg->variant_lists);
+  snet_stream_desc_t *instream;
+  snet_stream_desc_t *outstreams[num];
   int i;
   snet_record_t *rec;
+  match_count_t **matchcounter;
+  int num_init_branches = 0;
+  bool terminate = false;
+  int counter = 0;
+  int *usedcounter; /* to keep track how many times the branch is used */
 
+  /* open instream for reading */
+  instream = SNetStreamOpen(parg->input, 'r');
 
-  /* read a record from the instream */
-  rec = SNetStreamRead( parg->instream);
-
-  switch( SNetRecGetDescriptor( rec)) {
-
-    case REC_data:
-      {
-        int stream_index;
-        for( i=0; i<num; i++) {
-          CheckMatch( rec,
-                      SNetVariantListListGet( parg->variant_lists, i),
-                      parg->matchcounter[i]);
-        }
-        // used first match stategy
-        stream_index = BestMatch( parg->matchcounter, num);
-
-       // use Weighted Round Robin strategy
-       // stream_index = WeightedRoundRobin( matchcounter, usedcounter, num);
-
-        if (stream_index == -1) {
-          SNetUtilDebugFatalTask(
-              "[PAR] Cannot route data record, no matching branch!");
-        }
-        PutToBuffers( parg->outstreams, num, stream_index, rec,
-                      (parg->is_det)? &parg->counter : NULL);
-        parg->usedcounter[stream_index] += 1;  // increase the number of usage
-
-      }
-      break;
-
-    case REC_sync:
-      {
-#ifdef ENABLE_GC_STATE
-        snet_variant_t *synctype = SNetRecGetVariant(rec);
-        if (synctype!=NULL) {
-          snet_stream_desc_t *last = NULL;
-          int cnt = 0;
-
-          /* terminate affected branches */
-          for( i=0; i<num; i++) {
-            if ( VariantIsSupertypeOfAllOthers( synctype,
-                  SNetVariantListListGet( parg->variant_lists, i)) ) {
-              snet_record_t *term_rec = SNetRecCreate(REC_terminate);
-#ifdef DEBUG_PRINT_GC
-              SNetUtilDebugNoticeEnt( ent,
-                  "[PAR] Terminate branch %d due to outtype of synchrocell!", i);
-#endif
-              SNetRecSetFlag(term_rec);
-              SNetStreamWrite(parg->outstreams[i], term_rec);
-              SNetStreamClose(parg->outstreams[i], false);
-              parg->outstreams[i] = NULL;
-            }
-          }
-
-          /* count remaining branches */
-          for (i=0;i<num;i++) {
-            if (parg->outstreams[i] != NULL) {
-              cnt++;
-              last = parg->outstreams[i];
-              /* send sort records through */
-              SNetStreamWrite( parg->outstreams[i],
-                  SNetRecCreate( REC_sort_end, 0, parg->counter));
-            }
-          }
-          parg->counter++;
-
-          /* if only one branch left, we can terminate ourselves*/
-          if (cnt == 1) {
-            /* forward stripped sync record */
-            SNetRecSetVariant(rec, NULL);
-            SNetStreamWrite(last, rec);
-
-            /* close instream */
-            SNetStreamClose( parg->instream, true);
-#ifdef DEBUG_PRINT_GC
-            SNetUtilDebugNoticeEnt( ent,
-                "[PAR] Terminate self, as only one branch left!");
-#endif
-            TerminateParallelBoxTask(num,parg);
-            return;
-          } else {
-            /* usual sync replace */
-            SNetStreamReplace( parg->instream, SNetRecGetStream(rec));
-            SNetRecDestroy( rec);
-          }
-
-        } else
-#endif /* ENABLE_GC_STATE */
-        {
-          /* usual sync replace */
-          SNetStreamReplace( parg->instream, SNetRecGetStream(rec));
-          SNetRecDestroy( rec);
-        }
-      }
-      break;
-
-    case REC_collect:
-      SNetUtilDebugNoticeTask("[PAR] Received REC_collect, destroying it");
-      SNetRecDestroy( rec);
-      break;
-
-    case REC_sort_end:
-      /* increase level */
-      SNetRecSetLevel( rec, SNetRecGetLevel( rec) + 1);
-      /* send a copy to all */
-      for( i=0; i<num; i++) {
-        if(parg->outstreams[i] != NULL) {
-          SNetStreamWrite( parg->outstreams[i], SNetRecCopy( rec));
-        }
-      }
-      /* destroy the original */
-      SNetRecDestroy( rec);
-      break;
-
-    case REC_terminate:
-      /* send a copy to all */
-      for( i=0; i<num; i++) {
-        if(parg->outstreams[i] != NULL) {
-          SNetStreamWrite( parg->outstreams[i], SNetRecCopy( rec));
-        }
-      }
-      /* destroy the original */
-      SNetRecDestroy( rec);
-      /* close and destroy instream */
-      SNetStreamClose( parg->instream, true);
-      /* note that no sort record needs to be appended */
-      TerminateParallelBoxTask(num,parg);
-      return;
-
-    default:
-      SNetUtilDebugNoticeTask("[PAR] Unknown control rec destroyed (%d).\n",
-          SNetRecGetDescriptor( rec));
-      SNetRecDestroy( rec);
+  /* open outstreams for writing */
+  {
+    for (i=0; i<num; i++) {
+      outstreams[i] = SNetStreamOpen(parg->outputs[i], 'w');
+    }
+    /* the mem region is not needed anymore */
+    SNetMemFree( parg->outputs);
   }
-
-  SNetThreadingRespawn(NULL);
-}
-
-/**
- * Initialization Parallel Box Task
- */
-static void InitParallelBoxTask(void *arg)
-{
-  parallel_arg_t *parg = arg;
-
-  /* the number of outputs */
-  int num = SNetVariantListListLength(parg->variant_lists);
-  int i;
-  snet_record_t *rec;
-  parg->counter = 0;
-  parg->num_init_branches = 0;
-  parg->matchcounter = NULL;
-  parg->usedcounter = NULL;
 
   /* Handle initialiser branches */
   for( i=0; i<num; i++) {
     if (SNetVariantListLength( SNetVariantListListGet( parg->variant_lists, i)) == 0) {
 
-      PutToBuffers( parg->outstreams, num, i,
+      PutToBuffers( outstreams, num, i,
           SNetRecCreate( REC_trigger_initialiser),
-          (parg->is_det) ? &parg->counter : NULL
+          (parg->is_det) ? &counter : NULL
           );
       /* after terminate, it is not necessary to send a sort record */
       rec = SNetRecCreate( REC_terminate);
       SNetRecSetFlag(rec);
-      PutToBuffers( parg->outstreams, num, i, rec, NULL);
-      SNetStreamClose( parg->outstreams[i], false);
-      parg->outstreams[i] = NULL;
-      parg->num_init_branches += 1;
+      PutToBuffers( outstreams, num, i, rec, NULL);
+      SNetStreamClose( outstreams[i], false);
+      outstreams[i] = NULL;
+      num_init_branches += 1;
 #ifdef DEBUG_PRINT_GC
       SNetUtilDebugNoticeEnt( ent,
           "[PAR] Terminate initialiser branch %d!", i);
 #endif
     } else {
       /* on non-initialiser branches, send a sort record */
-      SNetStreamWrite( parg->outstreams[i], SNetRecCreate( REC_sort_end, 0, parg->counter));
+      SNetStreamWrite( outstreams[i], SNetRecCreate( REC_sort_end, 0, counter));
     }
   }
-  parg->counter++;
+  counter++;
 
-  switch( num - parg->num_init_branches) {
+  switch( num - num_init_branches) {
     case 1: /* remove dispatcher from network ... */
       for( i=0; i<num; i++) {
         if (SNetVariantListLength( SNetVariantListListGet( parg->variant_lists, i)) > 0) {
           /* send a sync record to the remaining branch */
-          SNetStreamWrite( parg->outstreams[i], SNetRecCreate( REC_sync, SNetStreamGet(parg->instream)));
-          SNetStreamClose( parg->instream, false);
+          SNetStreamWrite( outstreams[i], SNetRecCreate( REC_sync, parg->input));
+          SNetStreamClose( instream, false);
         }
       }
     case 0: /* and terminate */
-      TerminateParallelBoxTask(num, parg);
-      return;
+      terminate = true;
     break;
     default: ;/* or resume operation as normal */
   }
 
-  parg->matchcounter = SNetMemAlloc( num * sizeof( match_count_t*));
-  parg->usedcounter = SNetMemAlloc( num * sizeof( int));
+  matchcounter = SNetMemAlloc( num * sizeof( match_count_t*));
+  usedcounter = SNetMemAlloc( num * sizeof( int));
   for( i=0; i<num; i++) {
-    parg->matchcounter[i] = SNetMemAlloc( sizeof( match_count_t));
-    parg->usedcounter[i] = 0;
+    matchcounter[i] = SNetMemAlloc( sizeof( match_count_t));
+    usedcounter[i] = 0;
   }
 
-  SNetThreadingRespawn(&ParallelBoxTask);
-}
+  /* MAIN LOOP START */
+  while( !terminate) {
+    /* read a record from the instream */
+    rec = SNetStreamRead( instream);
+
+    switch( SNetRecGetDescriptor( rec)) {
+
+      case REC_data:
+        {
+          int stream_index;
+          for( i=0; i<num; i++) {
+            CheckMatch( rec, SNetVariantListListGet( parg->variant_lists, i), matchcounter[i]);
+          }
+          // used first match stategy
+          stream_index = BestMatch( matchcounter, num);
+
+         // use Weighted Round Robin strategy
+         // stream_index = WeightedRoundRobin( matchcounter, usedcounter, num);
+
+          if (stream_index == -1) {
+            SNetUtilDebugFatalEnt( ent,
+                "[PAR] Cannot route data record, no matching branch!");
+          }
+          PutToBuffers( outstreams, num, stream_index, rec, (parg->is_det)? &counter : NULL);
+          usedcounter[stream_index] += 1;  // increase the number of usage
+
+        }
+        break;
+
+      case REC_sync:
+        {
+#ifdef ENABLE_GARBAGE_COLLECTOR
+          snet_variant_t *synctype = SNetRecGetVariant(rec);
+          if (synctype != NULL) {
+            snet_stream_desc_t *last = NULL;
+            int cnt = 0;
+
+            /* terminate affected branches */
+            for( i=0; i<num; i++) {
+              if ( VariantIsSupertypeOfAllOthers( synctype,
+                    SNetVariantListListGet( parg->variant_lists, i)) ) {
+                snet_record_t *term_rec = SNetRecCreate(REC_terminate);
+#ifdef DEBUG_PRINT_GC
+                SNetUtilDebugNoticeEnt( ent,
+                    "[PAR] Terminate branch %d due to outtype of synchrocell!", i);
+#endif
+                SNetRecSetFlag(term_rec);
+                SNetStreamWrite(outstreams[i], term_rec);
+                SNetStreamClose(outstreams[i], false);
+                outstreams[i] = NULL;
+              }
+            }
+
+            /* count remaining branches */
+            for (i=0;i<num;i++) {
+            	if (outstreams[i] != NULL) {
+            		cnt++;
+            		last = outstreams[i];
+            	}
+            }
+            counter++;
+
+            /* if only one branch left, we can terminate ourselves*/
+            if (cnt == 1) {
+
+            	/* send a sort end to notify the paired collector so that the collector know all sort_end records coming from the last branch was not rasied the level by the this parallel entity
+            	 * Special (l0, c-1) is used for this purpose
+            	 * On the path the sort_end may reach other parallel and collector, parallel increases the level by 1, and collector decreases by 1
+            	 * When the sort_end record reaches the relevant collector, its level should be zero
+            	 * One collector is supposed to receive at most 1 this special sort_end record. After receiving it, the collector will terminate soon as well
+            	 * */
+            	snet_record_t *notify_rec = SNetRecCreate(REC_sort_end, 0, -1);
+            	SNetStreamWrite(last, notify_rec);
+
+              /* forward stripped sync record */
+              SNetRecSetVariant(rec, NULL);
+              SNetStreamWrite(last, rec);
+
+              /* close instream */
+              SNetStreamClose( instream, true);
+              terminate = true;
+#ifdef DEBUG_PRINT_GC
+              SNetUtilDebugNoticeEnt( ent,
+                  "[PAR] Terminate self, as only one branch left!");
+#endif
+            } else {
+              /* usual sync replace */
+              parg->input = SNetRecGetStream( rec);
+              SNetStreamReplace( instream, parg->input);
+              SNetRecDestroy( rec);
+            }
+
+          } else
+#endif /* ENABLE_GARBAGE_COLLECTOR */
+          {
+            /* usual sync replace */
+            parg->input = SNetRecGetStream( rec);
+            SNetStreamReplace( instream, parg->input);
+            SNetRecDestroy( rec);
+          }
+        }
+        break;
+
+      case REC_collect:
+        SNetUtilDebugNoticeEnt( ent, "[PAR] Received REC_collect, destroying it");
+        SNetRecDestroy( rec);
+        break;
+
+      case REC_sort_end:
+        /* increase level */
+        SNetRecSetLevel( rec, SNetRecGetLevel( rec) + 1);
+        /* send a copy to all */
+        for( i=0; i<num; i++) {
+          if (outstreams[i] != NULL) {
+            SNetStreamWrite( outstreams[i], SNetRecCopy( rec));
+          }
+        }
+        /* destroy the original */
+        SNetRecDestroy( rec);
+        break;
+
+      case REC_terminate:
+        terminate = true;
+        /* send a copy to all */
+        for( i=0; i<num; i++) {
+          if (outstreams[i] != NULL) {
+            SNetStreamWrite( outstreams[i], SNetRecCopy( rec));
+          }
+        }
+        /* destroy the original */
+        SNetRecDestroy( rec);
+        /* close and destroy instream */
+        SNetStreamClose( instream, true);
+        /* note that no sort record needs to be appended */
+        break;
+
+      default:
+        SNetUtilDebugNoticeEnt( ent, "[PAR] Unknown control rec destroyed (%d).\n",
+            SNetRecGetDescriptor( rec));
+        SNetRecDestroy( rec);
+    }
+  } /* MAIN LOOP END */
+
+
+  /* close the outstreams */
+  for( i=0; i<num; i++) {
+    if (outstreams[i] != NULL) {
+      SNetStreamClose( outstreams[i], false);
+    }
+    SNetMemFree( matchcounter[i]);
+  }
+  SNetMemFree( matchcounter);
+  SNetMemFree( usedcounter);
+
+  SNetVariantListListDestroy( parg->variant_lists);
+  SNetMemFree( parg);
+} /* END of PARALLEL BOX TASK */
+
+
+
 
 /*****************************************************************************/
 /* CREATION FUNCTIONS                                                        */
@@ -483,10 +480,9 @@ static void InitParallelBoxTask(void *arg)
  */
 static snet_stream_t *CreateParallel( snet_stream_t *instream,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
     snet_variant_list_list_t *variant_lists,
-    snet_ast_t **asts, bool is_det)
+    snet_startup_fun_t *funs, bool is_det)
 {
   int i;
   int num;
@@ -494,13 +490,17 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
   snet_stream_t *outstream;
   snet_stream_t **transits;
   snet_stream_t **collstreams;
-  snet_ast_t *ast;
+  snet_startup_fun_t fun;
   snet_variant_list_t *variants;
-  (void) variants;
+  snet_locvec_t *locvec;
+  (void) variants; /* NOT USED */
 
   num = SNetVariantListListLength( variant_lists);
 
-  instream = SNetRouteUpdate(info, instream, location, locvec->index);
+  locvec = SNetLocvecGet(info);
+  SNetLocvecParallelEnter(locvec);
+
+  instream = SNetRouteUpdate(info, instream, location);
   if(SNetDistribIsNodeLocation(location)) {
     transits    = SNetMemAlloc( num * sizeof( snet_stream_t*));
     collstreams = SNetMemAlloc( num * sizeof( snet_stream_t*));
@@ -509,32 +509,34 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
     LIST_ENUMERATE(variant_lists, i, variants) {
       snet_info_t *newInfo = SNetInfoCopy(info);
       transits[i] = SNetStreamCreate(0);
-      ast = asts[i];
-      collstreams[i] = SNetInstantiate(ast, transits[i], newInfo);
-      collstreams[i] = SNetRouteUpdate(newInfo, collstreams[i], location, locvec->index); //FIXME does this need its own index?
+      SNetLocvecParallelNext(locvec);
+      fun = funs[i];
+      collstreams[i] = (*fun)(transits[i], newInfo, location);
+      collstreams[i] = SNetRouteUpdate(newInfo, collstreams[i], location);
       SNetInfoDestroy(newInfo);
     }
 
+    SNetLocvecParallelReset(locvec);
+
     /* create parallel */
     parg = SNetMemAlloc( sizeof(parallel_arg_t));
-    parg->instream = SNetStreamOpen(instream, 'r');
-    parg->outstreams = SNetMemAlloc( num * sizeof(snet_stream_desc_t*));
+    parg->input   = instream;
     /* copy */
-    for (int i = 0; i < num; i++) {
-      parg->outstreams[i] = SNetStreamOpen(transits[i], 'w');
-    }
+    parg->outputs = transits;
     parg->variant_lists = variant_lists;
     parg->is_det = is_det;
 
-    SNetThreadingSpawn( ENTITY_parallel, location, SNetNameCreate(locvec, SNetIdGet(info),
-          "<parallel>"), &InitParallelBoxTask, parg);
+    SNetThreadingSpawn(
+        SNetEntityCreate( ENTITY_parallel, location, locvec,
+          "<parallel>", ParallelBoxTask, (void*)parg)
+        );
 
     /* create collector with collstreams */
-    outstream = CollectorCreateStatic(num, collstreams, locvec, location, info);
+    outstream = CollectorCreateStatic(num, collstreams, location, info);
 
     /* free collstreams array */
-    SNetMemFree(transits);
     SNetMemFree(collstreams);
+
 
   } else {
     LIST_ENUMERATE(variant_lists, i, variants) {
@@ -545,12 +547,15 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
       SNetInfoDestroy(newInfo);
     }
 
-    //SNetVariantListListDestroy( variant_lists);
+    SNetVariantListListDestroy( variant_lists);
 
     outstream = instream;
   }
 
-  return outstream;
+  SNetLocvecParallelLeave(locvec);
+
+  SNetMemFree( funs);
+  return( outstream);
 }
 
 
@@ -559,88 +564,48 @@ static snet_stream_t *CreateParallel( snet_stream_t *instream,
 /**
  * Parallel creation function
  */
-snet_stream_t *SNetParallelInst( snet_stream_t *instream,
+snet_stream_t *SNetParallel( snet_stream_t *instream,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
     snet_variant_list_list_t *variant_lists,
-    snet_ast_t **branches)
-{
-  return CreateParallel( instream, info, locvec, location, variant_lists, branches, false);
-}
-
-snet_ast_t *SNetParallel(int location,
-                         snet_variant_list_list_t *variant_lists,
-                         ...)
+    ...)
 {
   va_list args;
-  snet_startup_fun_t fun;
-  int num = SNetVariantListListLength( variant_lists);
+  int i, num;
+  snet_startup_fun_t *funs;
 
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_parallel;
-  result->locvec.type = LOC_PARALLEL;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->parallel.det = false;
-  result->parallel.variant_lists = variant_lists;
-  result->parallel.branches = SNetMemAlloc(num * sizeof(snet_ast_t*));
-
-  va_start(args, variant_lists);
-  for (int i = 0; i < num; i++) {
-    fun = va_arg(args, snet_startup_fun_t);
-    result->parallel.branches[i] = fun(location);
-    result->parallel.branches[i]->locvec.num = i;
-    result->parallel.branches[i]->locvec.parent = &result->locvec;
+  num = SNetVariantListListLength( variant_lists);
+  funs = SNetMemAlloc( num * sizeof( snet_startup_fun_t));
+  va_start( args, variant_lists);
+  for( i=0; i<num; i++) {
+    funs[i] = va_arg( args, snet_startup_fun_t);
   }
   va_end( args);
-  return result;
+
+  return CreateParallel( instream, info, location, variant_lists, funs, false);
 }
+
 
 /**
  * Det Parallel creation function
  */
-snet_stream_t *SNetParallelDetInst( snet_stream_t *inbuf,
+snet_stream_t *SNetParallelDet( snet_stream_t *inbuf,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
     snet_variant_list_list_t *variant_lists,
-    snet_ast_t **branches)
-{
-  int num;
-
-  num = SNetVariantListListLength( variant_lists);
-  return CreateParallel( inbuf, info, locvec, location, variant_lists, branches, true);
-}
-
-snet_ast_t *SNetParallelDet(int location,
-                            snet_variant_list_list_t *variant_lists,
-                            ...)
+    ...)
 {
   va_list args;
-  snet_startup_fun_t fun;
-  int num = SNetVariantListListLength( variant_lists);
+  int i, num;
+  snet_startup_fun_t *funs;
 
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_parallel;
-  result->locvec.type = LOC_PARALLEL;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->parallel.det = true;
-  result->parallel.variant_lists = variant_lists;
-  result->parallel.branches = SNetMemAlloc(num * sizeof(snet_ast_t*));
-
-  va_start(args, variant_lists);
-  for (int i = 0; i < num; i++) {
-    fun = va_arg(args, snet_startup_fun_t);
-    result->parallel.branches[i] = fun(location);
-    result->parallel.branches[i]->locvec.num = i;
-    result->parallel.branches[i]->locvec.parent = &result->locvec;
+  num = SNetVariantListListLength( variant_lists);
+  funs = SNetMemAlloc( num * sizeof( snet_startup_fun_t));
+  va_start( args, variant_lists);
+  for( i=0; i<num; i++) {
+    funs[i] = va_arg( args, snet_startup_fun_t);
   }
   va_end( args);
-  return result;
+
+  return CreateParallel( inbuf, info, location, variant_lists, funs, true);
 }

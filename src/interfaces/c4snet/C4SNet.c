@@ -13,6 +13,11 @@
 #include "out.h"
 #include "base64.h"
 
+/* FIXME: Needs to be replaced with arch/atomic.h from LPEL. */
+#if HAVE_SYNC_ATOMIC_BUILTINS
+#include "atomics.h"
+#endif
+
 #define COUNTS      3
 #define F_COUNT( c) c->counter[0]
 #define T_COUNT( c) c->counter[1]
@@ -58,7 +63,7 @@ static void (*MemFree)(void*) = &SNetMemFree;
 
 /************************* Distribution functions *****************************/
 #ifdef ENABLE_DIST_MPI
-static void MPIPackFun(c4snet_data_t *data, void *buf);
+static void MPIPackFun(c4snet_data_t *data, mpi_buf_t *buf);
 static c4snet_data_t *MPIUnpackFun(void *buf);
 #endif
 
@@ -93,8 +98,10 @@ static int sizeOfType(c4snet_type_t type)
     case CTYPE_float: return sizeof(float);
     case CTYPE_double: return sizeof(double);
     case CTYPE_ldouble: return sizeof(long double);
+    case CTYPE_pointer: return sizeof(void*);
     default:
-      SNetUtilDebugFatal("Unknown type in C4SNet language interface!");
+      SNetUtilDebugFatal("[%s]: Unknown type %d in C4SNet language interface!",
+                         __func__, type);
   }
 
   return 0;
@@ -126,9 +133,10 @@ static void SerialiseData(FILE *file, c4snet_type_t type, void *data)
     case CTYPE_ulong: fprintf(file, "%lu", *(unsigned long *) data); break;
     case CTYPE_long: fprintf(file, "%ld", *(long *) data); break;
     case CTYPE_float: fprintf(file, "%.32f", *(float *) data); break;
-    case CTYPE_double: fprintf(file, "%.32e", *(double *) data); break;
+    case CTYPE_double: fprintf(file, "%.32le", *(double *) data); break;
     case CTYPE_ldouble: fprintf(file, "%.32Le", *(long double *) data); break;
-    default: SNetUtilDebugFatal("Unknown type in C4SNet.");
+    case CTYPE_pointer: fprintf(file, "%p", *(void **) data); break;
+    default: SNetUtilDebugFatal("[%s]: Unknown type %d in C4SNet.", __func__, type);
   }
 }
 
@@ -147,7 +155,8 @@ static void C4SNetSerialise(FILE *file, c4snet_data_t *data)
     case CTYPE_float: fprintf(file, "(float"); break;
     case CTYPE_double: fprintf(file, "(double"); break;
     case CTYPE_ldouble: fprintf(file, "(long double"); break;
-    default: SNetUtilDebugFatal("Unknown type in C4SNet.");
+    case CTYPE_pointer: fprintf(file, "(pointer"); break;
+    default: SNetUtilDebugFatal("[%s]: Unknown type %d in C4SNet.", __func__, data->type);
   }
 
   if (data->vtype == VTYPE_array) fprintf(file, "[%lu]", data->size);
@@ -182,7 +191,7 @@ static void DeserialiseData(FILE *file, c4snet_type_t type, void *data)
         if (!strcmp(buf, "&amp;")) *(char *) data = '&';
         else if (!strcmp(buf, "&lt;")) *(char *) data = '<';
         else if (count == 1) *(char *) data = buf[0];
-        else SNetUtilDebugFatal("C4SNet: Couldn't deserialise data.");
+        else SNetUtilDebugFatal("[%s]: FIXME invalid char '%s'.", __func__, buf);
 
         if (type == CTYPE_uchar) *(unsigned char*) data = (unsigned char) *(char*) data;
         return;
@@ -197,7 +206,8 @@ static void DeserialiseData(FILE *file, c4snet_type_t type, void *data)
     case CTYPE_float: fmt = "%f"; break;
     case CTYPE_double: fmt = "%lf"; break;
     case CTYPE_ldouble: fmt = "%Lf"; break;
-    default: SNetUtilDebugFatal("C4SNet: Invalid C datatype.");
+    case CTYPE_pointer: fmt = "%p"; break;
+    default: SNetUtilDebugFatal("[%s]: FIXME invalid type %d.", __func__, type);
   }
 
   fscanf(file, fmt, data);
@@ -231,15 +241,17 @@ static c4snet_data_t *C4SNetDeserialise(FILE *file)
   else if(strncmp(buf, "float", size) == 0)           temp->type = CTYPE_float;
   else if(strncmp(buf, "double", size) == 0)          temp->type = CTYPE_double;
   else if(strncmp(buf, "long double", size) == 0)     temp->type = CTYPE_ldouble;
-  else SNetUtilDebugFatal("C4SNet interface encountered an unknown type.");
+  else if(strncmp(buf, "pointer", size) == 0)         temp->type = CTYPE_pointer;
+  else SNetUtilDebugFatal("[%s]: C4SNet interface encountered an unknown type.", __func__);
 
   if (temp->vtype == VTYPE_simple) {
     DeserialiseData(file, temp->type, &temp->data);
   } else {
     temp->data.ptr = MemAlloc(AllocatedSpace(temp));
     for (int i = 0; i < temp->size; i++) {
-      if (i > 0 && fgetc(file) != ',') SNetUtilDebugFatal("C4SNet: Parse error deserialising data.");
-
+      if (i > 0 && fgetc(file) != ',') {
+        SNetUtilDebugFatal("[%s]: Parse error deserialising data.", __func__);
+      }
       DeserialiseData(file, temp->type,
                       (char*) temp->data.ptr + i * C4SNetSizeof(temp));
     }
@@ -351,14 +363,32 @@ void C4SNetOut( void *hnd, int variant, ...)
   va_end(args);
 }
 
+/* Retrieve the type of the data. */
+c4snet_type_t C4SNetGetType(c4snet_data_t *data)
+{ return data->type; }
+
 /* Return size of the data type. */
 int C4SNetSizeof(c4snet_data_t *data)
 { return sizeOfType(data->type); }
 
+/* Get the number of array elements. */
 size_t C4SNetArraySize(c4snet_data_t *data)
 { return data->size; }
 
-
+/* Get a copy of an unterminated char array as a proper C string. */
+char* C4SNetGetString(c4snet_data_t *data)
+{
+  if (data->type != CTYPE_char && data->type != CTYPE_uchar) {
+    SNetUtilDebugFatal("[%s]: Not a char array type %d.", __func__, data->type);
+    return NULL; /* NOT REACHED */
+  } else {
+    size_t size = C4SNetArraySize(data);
+    char* str = SNetMemAlloc(size + 1);
+    memcpy(str, C4SNetGetData(data), size);
+    str[size] = '\0';
+    return str;
+  }
+}
 
 /* Creates a new c4snet_data_t struct. */
 c4snet_data_t *C4SNetAlloc(c4snet_type_t type, size_t size, void **data)
@@ -411,7 +441,16 @@ void *C4SNetGetData(c4snet_data_t *data)
 /* Frees the memory allocated for c4snet_data_t struct. */
 void C4SNetFree(c4snet_data_t *data)
 {
-  if (--data->ref_count == 0) {
+#if HAVE_SYNC_ATOMIC_BUILTINS
+  /* Temporary fix for race condition: */
+  unsigned int refs = FAS(&data->ref_count, 1);
+  assert(refs > 0);
+  if (refs == 1)
+#else
+  /* Old code, which contains a race condition: */
+  if (--data->ref_count == 0)
+#endif
+  {
     if (data->vtype == VTYPE_array) MemFree(data->data.ptr);
 
     SNetMemFree(data);
@@ -422,7 +461,13 @@ void C4SNetFree(c4snet_data_t *data)
 
 c4snet_data_t *C4SNetShallowCopy(c4snet_data_t *data)
 {
+#if HAVE_SYNC_ATOMIC_BUILTINS
+  /* Temporary fix for race condition: */
+  AAF(&data->ref_count, 1);
+#else
+  /* Old code, which contains a race condition: */
   data->ref_count++;
+#endif
   return data;
 }
 
@@ -491,17 +536,17 @@ static void SCCFreeWrapper(void *p)
 
 static void SCCPackFun(c4snet_data_t *data, void *buf)
 {
-  SNetDistribPackOld(data, buf, sizeof(c4snet_data_t), false);
+  SNetDistribPack(data, buf, sizeof(c4snet_data_t), false);
 
   if (data->vtype == VTYPE_array) {
-    SNetDistribPackOld(data->data.ptr, buf, AllocatedSpace(data), true);
+    SNetDistribPack(data->data.ptr, buf, AllocatedSpace(data), true);
   }
 }
 
 static void *SCCUnpackFun(void *buf)
 {
   c4snet_data_t *result = SNetMemAlloc(sizeof(c4snet_data_t));
-  SNetDistribUnpackOld(result, buf, false, sizeof(c4snet_data_t));
+  SNetDistribUnpack(result, buf, false, sizeof(c4snet_data_t));
 
   result->ref_count = 1;
   if (result->vtype == VTYPE_array) {

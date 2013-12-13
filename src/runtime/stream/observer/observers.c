@@ -28,7 +28,6 @@
 #include <netdb.h>
 #include <regex.h>
 
-#include "ast.h"
 #include "bool.h"
 #include "constants.h"
 #include "memfun.h"
@@ -853,7 +852,7 @@ static int ObserverSend(obs_handle_t *hnd, snet_record_t *rec)
 
 /** <!--********************************************************************-->
  *
- * @fn void ObserverBoxTask( void *arg) {
+ * @fn void ObserverBoxTask( snet_entity_t *self, void *arg) {
  *
  *   @brief  The main function for observer task.
  *
@@ -864,12 +863,13 @@ static int ObserverSend(obs_handle_t *hnd, snet_record_t *rec)
  *
  ******************************************************************************/
 
-static void ObserverBoxTask(void *arg)
+static void ObserverBoxTask(snet_entity_t *ent, void *arg)
 {
   obs_handle_t *hnd = (obs_handle_t*)arg;
   snet_record_t *rec = NULL;
   bool terminate = false;
   snet_stream_desc_t *instream, *outstream;
+  (void) ent; /* NOT USED */
 
   instream  = SNetStreamOpen(hnd->inbuf,  'r');
   outstream = SNetStreamOpen(hnd->outbuf, 'w');
@@ -913,7 +913,10 @@ static void CreateObserverTask( obs_handle_t *hnd)
   char name[16];
   (void) snprintf(name, 16, "observer%02d", hnd->id);
   /* create a detached wrapper thread */
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL, name), ObserverBoxTask, hnd);
+  SNetThreadingSpawn(
+      SNetEntityCreate( ENTITY_other, -1, NULL,
+        name, ObserverBoxTask, (void*)hnd)
+      );
 }
 
 
@@ -966,7 +969,7 @@ snet_stream_t *SNetObserverSocketBox( snet_stream_t *input,
   obs_handle_t *hnd;
   snet_stream_t *output = NULL;
 
-  input = SNetRouteUpdate(info, input, location, -1);
+  input = SNetRouteUpdate(info, input, location);
 
   if(SNetDistribIsNodeLocation(location)) {
     hnd = SNetMemAlloc(sizeof(obs_handle_t));
@@ -1049,7 +1052,7 @@ snet_stream_t *SNetObserverFileBox(snet_stream_t *input,
   obs_handle_t *hnd;
   snet_stream_t *output = NULL;
 
-  input = SNetRouteUpdate(info, input, location, -1);
+  input = SNetRouteUpdate(info, input, location);
 
   if(SNetDistribIsNodeLocation(location)) {
     hnd = SNetMemAlloc(sizeof(obs_handle_t));

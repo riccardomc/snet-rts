@@ -145,21 +145,13 @@ static void SNetInClose(FILE *file)
 
 
 /**
- * Main starting entry point of the SNet program
+ * Process commandline options.
  */
-int SNetInRun(int argc, char **argv,
-              char *static_labels[], int number_of_labels,
-              char *static_interfaces[], int number_of_interfaces,
-              snet_startup_fun_t fun)
+static int SNetInParseOptions(int argc, char **argv, FILE **input_ptr, FILE **output_ptr)
 {
   FILE *input = stdin;
   FILE *output = stdout;
-  snet_stream_t *input_stream = NULL;
-  snet_stream_t *output_stream = NULL;
   int i = 0;
-  snet_info_t *info;
-  snetin_label_t *labels = NULL;
-  snetin_interface_t *interfaces = NULL;
   char *brk;
   char addr[256];
   int len;
@@ -169,16 +161,7 @@ int SNetInRun(int argc, char **argv,
   for(i = 1; i < argc; i++) {
     if(strcmp(argv[i], "-h") == 0) {
       /* Help */
-      printf("usage: <executable name> [options]\n");
-      printf("\nOptions:\n");
-      printf("\t-i <filename>\t\tInput from file.\n");
-      printf("\t-I <port>\t\tInput from socket.\n");
-      printf("\t-h \t\t\tDisplay this help text.\n");
-      printf("\t-o <filename>\t\tOutput to file.\n");
-      printf("\t-O <address:port>\tOutput to socket.\n");
-      printf("\t-m <mon_level>\t\tSet monitoring level (LPEL only).\n");
-      printf("\t-w <workers>\t\tSet number of workers (LPEL) / visible cores (PThread).\n");
-      printf("\n");
+      SNetRuntimeHelpText();
 
       if(input != stdin && input != NULL) {
 	SNetInClose(input);
@@ -222,13 +205,16 @@ int SNetInRun(int argc, char **argv,
     }
   }
 
+  *input_ptr = input;
+  *output_ptr = output;
+
   if(input == NULL) {
 
     if(output != stdout && output != NULL) {
       SNetInClose(output);
     }
 
-    SNetUtilDebugFatal("");
+    SNetUtilDebugFatal("Could not open input");
   }
 
   if(output == NULL) {
@@ -237,15 +223,39 @@ int SNetInRun(int argc, char **argv,
       SNetInClose(input);
     }
 
-    SNetUtilDebugFatal("");
+    SNetUtilDebugFatal("Could not open output");
   }
 
+  return 1;
+}
+
+/**
+ * Main starting entry point of the SNet program
+ */
+int SNetInRun(int argc, char **argv,
+              char *static_labels[], int number_of_labels,
+              char *static_interfaces[], int number_of_interfaces,
+              snet_startup_fun_t fun)
+{
+  FILE *input = NULL;
+  FILE *output = NULL;
+  snet_stream_t *input_stream = NULL;
+  snet_stream_t *output_stream = NULL;
+  snet_info_t *info;
+  snet_locvec_t *locvec;
+  snetin_label_t *labels = NULL;
+  snetin_interface_t *interfaces = NULL;
+
+  if (0 == SNetInParseOptions(argc, argv, &input, &output)) {
+    return 0;
+  }
 
   /* Actual SNet network interface main: */
 
   /* check for number of interfaces */
   if (0 == number_of_interfaces) {
-    SNetUtilDebugFatal("No language interfaces were specified by the source program!");
+    SNetUtilDebugNotice("No language interfaces were specified by the source program!");
+    exit(1);
   }
 
   labels     = SNetInLabelInit(static_labels, number_of_labels);
@@ -277,7 +287,7 @@ int SNetInRun(int argc, char **argv,
     SNetInInputInit(input, labels, interfaces, input_stream);
   }
 
-  SNetDistribWaitExit(info);
+  SNetRuntimeStartWait(input_stream, info, output_stream);
 
   SNetASTCleanup();
 

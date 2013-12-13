@@ -263,12 +263,12 @@ snet_ast_t *SNetFeedback(int location,
                          snet_expr_list_t *guards,
                          snet_startup_fun_t box_a);
 
-snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
+snet_stream_t *SNetFeedbackDet( snet_stream_t *inbuf,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
-    snet_variant_list_t *back_patterns,
+    snet_variant_list_t *back_pattern,
     snet_expr_list_t *guards,
-    snet_ast_t *box_a);
+    snet_startup_fun_t box_a);
+
 
 #endif /* _SNETENTITIES_H_ */

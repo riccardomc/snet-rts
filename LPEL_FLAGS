@@ -1,0 +1,47 @@
+This file shows the meaning of LPEL flags
+
+-i <input file>: specify input file
+
+-m <monitoring flag combination>: enable monitoring (for more detail, see LOGFORMAT)
+
+-w <num>: 	specify the number of workers (including master in lpel_hrc, e.g. -w 2 ==> 1 master, 1 worker)
+-cw <num>: 	specify the number of cpus used for workers (and master in lpel_hrc)
+-co <num>: 	specify the number of cpus used for wrappers
+-sosi:    	enable supporting source/sink
+
+Each wrapper/source/sink is mapped separately to its own thread.
+Source tasks are tasks of entities starting with "snet_source"
+Sink tasks are tasks of entities starting with "snet_sink"
+
+By default: w = #cpus
+            cw =# cpus
+            co = 0
+If co = 0; wrapper/source/sink are executed on the same set of cpus as workers
+
+-np: disable pinned mode. By default, pinned mode is enable, i.e. workers and master are mapped in their set of cpus with round-robin manner. E.g. if there is 3 cpus for master/worker and there are 1 master and 4 workers:  master is mapped to cpu 0, worker 1 is mapped to cpu 1, worker 2 is mapped to cpu 2, worker 3 is mapped to cpu 0, worker 4 is mapped to cpu 1.
+When this mode is disable, worker/master are mapped to the set of cpus but not pinned to any specific cpu.
+
+
+-excl: workers and master are executed on exclusive cpus, i.e. one worker/master has its own cpu
+ If this flag is used:
+    + pinned mode must be enable
+    + co > 0
+    + #cpus >= cw + co
+
+
+** Extra option for LPEL_DECEN
+-dloc: enable user-specified mapping. User can specify which worker an SNet-entity is mapped by using @ symbol.
+
+  *For task migration in lpel_decen:
+    -tm <num>         : mechanims for task migration (1: random-based, 2: waiting-proportion-based)
+    -threshold <val>  : random threshold used in random-based migration
+
+
+** Extra options for HRC LPLE
+-pf <num>: choose priority function (14 options, see implementation document for more defail). Default priority function 14: f = SI - SO
+
+-nd <num>: set negative demand limit. A task will have the lowest priority when its negative demand (SO) is smaller than this limit. This option is used mostly for experiments. If the limit is negative, this mode is disabled. By default, this mode is disabled.
+
+-rl <num>: set scheduling cycle. This is the maximum number of records that a task can produce in one dispatch. By default, it is set as a negative value, i.e. this is not applied and a task can produce as much as it can in one dispatch. Syncrocell, nameshift, wrapper and collector tasks have unlimited scheduling cycle.
+
+

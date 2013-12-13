@@ -19,7 +19,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "ast.h"
 #include "memfun.h"
 #include "input.h"
 #include "snetentities.h"
@@ -44,7 +43,7 @@ typedef struct {
 /**
  * This is the task doing the global input
  */
-static void GlobInputTask(void* data)
+static void GlobInputTask(snet_entity_t *ent, void* data)
 {
   handle_t *hnd = (handle_t *)data;
 
@@ -52,7 +51,7 @@ static void GlobInputTask(void* data)
     int i;
     snet_stream_desc_t *outstream = SNetStreamOpen(hnd->buffer, 'w');
 
-    SNetInParserInit( hnd->file, hnd->labels, hnd->interfaces, outstream);
+    SNetInParserInit( hnd->file, hnd->labels, hnd->interfaces, outstream, ent);
     i = SNET_PARSE_CONTINUE;
     while(i != SNET_PARSE_TERMINATE){
       i = SNetInParserParse();
@@ -79,5 +78,8 @@ void SNetInInputInit(FILE *file,
   hnd->interfaces = interfaces;
   hnd->buffer = in_buf;
 
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL, "glob_input"), GlobInputTask, hnd);
+  SNetThreadingSpawn(
+      SNetEntityCreate( ENTITY_other, -1, NULL,
+        "glob_input", GlobInputTask, (void*)hnd)
+      );
 }

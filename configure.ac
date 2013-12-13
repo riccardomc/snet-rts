@@ -73,7 +73,13 @@ AX_APPEND_FLAG(["$PTHREAD_LIBS"], LIBS)
 #CFLAGS="$CFLAGS $PTHREAD_CFLAGS"
 
 
-AC_CHECK_FUNCS([pthread_setaffinity_np])
+AC_ARG_ENABLE([setaffinity], [AS_HELP_STRING([--disable-setaffinity],
+    [Disable the use of pthread_setaffinity_np to limit the number
+     of processor cores when the -w option is given to the runtime
+     system (default is enabled).])])
+if test x$enable_setaffinity != xno; then
+  AC_CHECK_FUNCS([pthread_setaffinity_np])
+fi
 AC_CHECK_FUNCS([pthread_yield_np])
 AC_CHECK_FUNCS([pthread_yield])
 
@@ -111,7 +117,7 @@ fi
 
 AC_LANG_POP([C])
 
-LT_PREREQ([2.4])
+LT_PREREQ([2.2])
 LT_INIT()
 AC_SUBST([LIBTOOL_DEPS])
 
@@ -121,12 +127,13 @@ dnl check for building lpel threading backend
 
 AC_ARG_WITH([lpel-includes], [AC_HELP_STRING([--with-lpel-includes=DIR], [look up lpel.h in DIR])], [], [with_lpel_includes=])
 AC_MSG_CHECKING([for lpel.h in $with_lpel_includes])
-if test -r "$with_lpel_includes/lpel.h"; then
+if test -r "$with_lpel_includes/lpel_common.h" && test -r "$with_lpel_includes/lpel.h" && test -r "$with_lpel_includes/hrc_lpel.h"
+then
    with_lpel_includes=`(cd "$with_lpel_includes"; pwd)`
    AC_MSG_RESULT([yes])
 else
    AC_MSG_RESULT([no])
-   AC_MSG_WARN([unable to find $with_lpel_includes/lpel.h, cannot use LPEL])
+   AC_MSG_WARN([unable to find $with_lpel_includes/lpel_common.h, $with_lpel_includes/lpel.h, $with_lpel_includes/hrc_lpel.h. Cannot use LPEL])
    with_lpel_includes=
 fi
 
@@ -145,6 +152,8 @@ if test -n "$with_lpel_includes" -a -n "$with_lpel_libs"; then
    LPEL_INCLUDES=-I$with_lpel_includes
    LIBLPEL_LA=$with_lpel_libs/liblpel.la
    AC_SUBST([LIBLPEL_LA])
+   LIBLPEL_HRC_LA=$with_lpel_libs/liblpel_hrc.la
+   AC_SUBST([LIBLPEL_HRC_LA])
    AC_SUBST([LPEL_INCLUDES])
    have_lpel=yes
 fi
@@ -154,15 +163,36 @@ AM_CONDITIONAL([ENABLE_TH_LPEL], [test $have_lpel = yes])
 
 dnl check for sac compiler in order to build sac4snet interface
 
-AC_CHECK_PROGS([SAC2C], [sac2c])
-AC_CHECK_PROGS([SAC4C], [sac4c])
-have_sac=no
-if test -n "$SAC2C" -a -n "$SAC4C"; then
-  have_sac=yes
+AC_ARG_ENABLE([sac4snet], [AS_HELP_STRING([--enable-sac4snet],
+[Enable the SAC interface to S-NET. Set to "yes", "no" (or --disable), or "auto" (default). If "auto", enable if SAC is available.])],
+[], [enable_sac4snet=auto])
+if test "x$enable_sac4snet" != xno; then
+  AC_CHECK_PROGS([SAC2C], [sac2c], [no])
+  AC_CHECK_PROGS([SAC4C], [sac4c], [no])
+  if test "x$SAC2C" = xno -o "x$SAC4C" = xno; then
+    if test "x$enable_sac4snet" = xyes; then
+       AC_MSG_ERROR([sac2c or sac4c not found. Cannot build sac4snet (maybe use --disable-sac4snet?)])
+    fi
+    enable_sac4snet=no
+  else
+    if test -z "$SAC2CBASE"; then
+       AC_MSG_WARN([SAC2CBASE is not set, expect problems during build.])
+    fi
+    enable_sac4snet=yes
+  fi
 fi
-AM_CONDITIONAL([ENABLE_SAC4SNET], [test $have_sac = yes])
+AM_CONDITIONAL([ENABLE_SAC4SNET], [test x$enable_sac4snet = xyes])
 
-
+AC_ARG_WITH([sac4snet-targets], [AC_HELP_STRING([--with-sac4snet-targets],
+[Select which back-end targets to build the sac4snet interface for. Defaults to "seq,mtpth,mtlpel"])],
+        [], [with_sac4snet_targets=seq,mtpth,mtlpel])
+with_sac4snet_targets=`echo "$with_sac4snet_targets" | tr ',' ' '`
+for target in $with_sac4snet_targets; do
+   eval enable_sac4snet__$target=yes
+done
+AM_CONDITIONAL([ENABLE_SAC4SNET_SEQ], [test x$enable_sac4snet__seq = xyes])
+AM_CONDITIONAL([ENABLE_SAC4SNET_MT_PTH], [test x$enable_sac4snet__mtpth = xyes])
+AM_CONDITIONAL([ENABLE_SAC4SNET_MT_LPEL], [test x$enable_sac4snet__mtlpel = xyes])
 
 dnl generate output
 

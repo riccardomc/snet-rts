@@ -30,25 +30,24 @@ snet_msg_t SNetDistribRecvMsg(void)
   MPI_Get_count(&status, MPI_PACKED, &count);
 
   MPI_Pack_size(count, MPI_PACKED, MPI_COMM_WORLD, &recvBuf.offset);
-  if ((unsigned) recvBuf.offset > recvBuf.size) {
-    SNetMemFree(recvBuf.data);
-    recvBuf.data = SNetMemAlloc(recvBuf.offset);
+  if (recvBuf.offset > recvBuf.size) {
+    recvBuf.data = SNetMemResize(recvBuf.data, recvBuf.offset);
     recvBuf.size = recvBuf.offset;
   }
 
-  MPI_Recv(recvBuf.data, count, MPI_PACKED, MPI_ANY_SOURCE, status.MPI_TAG,
+  MPI_Recv(recvBuf.data, count, MPI_PACKED, status.MPI_SOURCE, status.MPI_TAG,
             MPI_COMM_WORLD, &status);
 
   recvBuf.offset = 0;
   result.type = status.MPI_TAG;
 
-  switch (result.type) {
+  switch (status.MPI_TAG) {
     case snet_rec:
         result.rec = SNetRecDeserialise(&recvBuf);
     case snet_block:
     case snet_unblock:
       result.dest = SNetDestDeserialise(&recvBuf);
-      result.dest->node = status.MPI_SOURCE;
+      result.dest.node = status.MPI_SOURCE;
       break;
     case snet_ref_set:
       result.ref = SNetRefDeserialise(&recvBuf);
@@ -62,7 +61,12 @@ snet_msg_t SNetDistribRecvMsg(void)
       result.ref = SNetRefDeserialise(&recvBuf);
       SNetDistribUnpack(&recvBuf, &result.val, sizeof(result.val));
       break;
+    case snet_update:
+      break;
+    case snet_stop:
+      break;
     default:
+      SNetUtilDebugFatal("[%s]: Unexpected MPI TAG %d\n", __func__, result.type);
       break;
   }
 

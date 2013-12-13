@@ -63,7 +63,13 @@ const char *t_descr[] = {
 
 int my_interface_id;
 
-typedef enum { SACint=3, SACflt=11, SACdbl=12} SACbasetype_t; 
+enum simpletype_t {
+	#define TYP_IFname(name) name
+	#include "type_info.mac" 
+	#undef TYP_IFname
+};
+
+typedef enum simpletype_t SACbasetype_t;
 
 extern void SACARGfree( void*);
 extern void *SACARGcopy( void*);
@@ -137,9 +143,9 @@ static void *SAC4SNetDataDecode(FILE *file)
 static size_t sizeOfType(SACbasetype_t type)
 {
   switch (type) {
-    case SACint: return sizeof(int);
-    case SACdbl: return sizeof(double);
-    case SACflt: return sizeof(float);
+    case T_int: return sizeof(int);
+    case T_double: return sizeof(double);
+    case T_float: return sizeof(float);
     default:
       SNetUtilDebugFatal("Unknown SAC type!\n");
       break;
@@ -290,19 +296,19 @@ static void SAC4SNetDataSerialise( FILE *file, void *ptr)
     SAC_AttachHive(SAC_AllocHive(1, 2, NULL, NULL));
 
     switch( SACARGgetBasetype( arg)) {
-      case SACint: 
+      case T_int: 
         SAC4SNetFibreIO__PrintIntArray2( 
             &ret,
             SACARGconvertFromVoidPointer( SACTYPE_StdIO_File, file),
             SACARGnewReference( arg));
       break;
-      case SACflt: 
+      case T_float: 
         SAC4SNetFibreIO__PrintFloatArray2( 
             &ret,
             SACARGconvertFromVoidPointer( SACTYPE_StdIO_File, file),
             SACARGnewReference( arg));
       break;
-      case SACdbl: 
+      case T_double: 
         SAC4SNetFibreIO__PrintDoubleArray2( 
             &ret,
             SACARGconvertFromVoidPointer( SACTYPE_StdIO_File, file),
@@ -357,21 +363,21 @@ static void *SAC4SNetDataDeserialise( FILE *file)
 
       sac_shp = SACARGconvertFromIntPointerVect( shape, 1, &dim);
       switch( basetype) {
-        case SACint:
+        case T_int:
           SAC4SNetFibreIO__ScanIntArray2( 
               &dummy, 
               &scanres, 
               SACARGconvertFromVoidPointer( SACTYPE_StdIO_File, datafile),
               sac_shp);
           break;
-        case SACdbl:
+        case T_double:
           SAC4SNetFibreIO__ScanDoubleArray2( 
               &dummy, 
               &scanres, 
               SACARGconvertFromVoidPointer( SACTYPE_StdIO_File, datafile),
               sac_shp);
           break;
-        case SACflt:
+        case T_float:
           SAC4SNetFibreIO__ScanFloatArray2( 
               &dummy, 
               &scanres, 
@@ -381,7 +387,7 @@ static void *SAC4SNetDataDeserialise( FILE *file)
         default: /* unsupported base type */
             scanres = NULL;
             printf( "\n>%d<\n", basetype);
-            Error("Unsupported Base Type");
+            Error("Unsupported Base Type. We only support int, float and double.");
           break;
       }
       fclose( datafile);

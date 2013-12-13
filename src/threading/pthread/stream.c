@@ -81,6 +81,7 @@ snet_stream_desc_t *SNetStreamOpen(snet_stream_t *stream, char mode)
 {
   assert( mode=='w' || mode=='r' );
   snet_stream_desc_t *sd = SNetMemAlloc(sizeof(snet_stream_t));
+  sd->thr = SNetThreadingSelf();
   sd->stream = stream;
   sd->next = NULL;
   sd->mode = mode;
@@ -113,6 +114,7 @@ void SNetStreamReplace(snet_stream_desc_t *sd, snet_stream_t *new_stream)
   pthread_mutex_unlock( &new_stream->lock);
   sd->stream = new_stream;
 }
+
 
 snet_stream_t *SNetStreamGet(snet_stream_desc_t *sd)
 {
@@ -169,7 +171,6 @@ void SNetStreamWrite(snet_stream_desc_t *sd, void *item)
 {
   assert( sd->mode == 'w' );
   snet_stream_t *s = sd->stream;
-  sd->thr = SNetThreadingSelf();
 
   pthread_mutex_lock( &s->lock);
   while(s->count == s->size){
@@ -222,14 +223,14 @@ snet_stream_desc_t *SNetStreamPoll(snet_streamset_t *set)
   assert( *set != NULL);
 
   snet_stream_desc_t *result = NULL;
-  /* get 'self', i.e. the task calling SNetStreamPoll()
-   * the set is a simple pointer to the last element
-   */
-  snet_thread_t *self = SNetThreadingSelf();
+  snet_thread_t *self;
   snet_stream_iter_t *iter;
   int cnt = 0;
 
-  //self = (*set)->thr;
+  /* get 'self', i.e. the task calling SNetStreamPoll()
+   * the set is a simple pointer to the last element
+   */
+  self = (*set)->thr;
 
   iter = SNetStreamIterCreate(set);
 
@@ -259,7 +260,6 @@ snet_stream_desc_t *SNetStreamPoll(snet_streamset_t *set)
   SNetStreamIterReset(iter, set);
   while( SNetStreamIterHasNext(iter)) {
     snet_stream_desc_t *sd = SNetStreamIterNext( iter);
-    sd->thr = SNetThreadingSelf();
     snet_stream_t *s = sd->stream;
 
     /* lock stream (prod-side) */
@@ -314,3 +314,9 @@ poll_fastpath:
 
   return result;
 }
+
+
+int SNetStreamGetId(snet_stream_desc_t *sd) {
+	return -1;
+}
+
