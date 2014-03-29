@@ -10,11 +10,11 @@
  */
 #include <assert.h>
 
-#include "ast.h"
 #include "snetentities.h"
 
 #include "expression.h"
 #include "memfun.h"
+#include "locvec.h"
 #include "queue.h"
 
 #include "threading.h"
@@ -265,6 +265,8 @@ static void FeedbackDispTask(void *arg)
       SNetStreamClose(fbdarg->outstream,  false);
       SNetStreamClose(fbdarg->backstream, false);
 
+      SNetVariantListDestroy( fbdarg->back_patterns);
+      SNetExprListDestroy( fbdarg->guards);
       SNetMemFree( fbdarg);
       return;
 
@@ -439,17 +441,21 @@ static void FeedbackBufTask(void *arg)
 /****************************************************************************/
 /* CREATION FUNCTION                                                        */
 /****************************************************************************/
-snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
+snet_stream_t *SNetFeedback( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *back_patterns,
     snet_expr_list_t *guards,
-    snet_ast_t *box_a)
+    snet_startup_fun_t box_a
+    )
 {
   snet_stream_t *output;
+  snet_locvec_t *locvec;
 
-  input = SNetRouteUpdate(info, input, location, locvec->index);
+  locvec = SNetLocvecGet(info);
+  SNetLocvecFeedbackEnter(locvec);
+
+  input = SNetRouteUpdate(info, input, location);
   if (SNetDistribIsNodeLocation(location)) {
     snet_stream_t *into_op, *from_op;
     snet_stream_t *back_bufin, *back_bufout;
@@ -477,8 +483,8 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
     fbbarg->max_read = fbbarg->out_capacity; /* TODO better usual stream capacity */
     fbbarg->internal_buffer = SNetQueueCreate();
 #endif /* FEEDBACK_STREAM_EMITTER */
-    SNetThreadingSpawn( ENTITY_fbbuf, location, SNetNameCreate(locvec, SNetIdGet(info),
-          "<fbbuf>"), &FeedbackBufTask, fbbarg);
+    SNetThreadingSpawn( ENTITY_fbbuf, location, locvec,
+          "<fbbuf>", &FeedbackBufTask, fbbarg);
 #else
     back_bufin = back_bufout;
 #endif
@@ -490,12 +496,12 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
     fbcarg->outstream = SNetStreamOpen(into_op, 'w');
     fbcarg->backstream = SNetStreamOpen(back_bufout, 'r');
     fbcarg->mode = FBCOLL_IN;
-    SNetThreadingSpawn( ENTITY_fbcoll, location, SNetNameCreate(locvec, SNetIdGet(info),
-          "<fbcoll>"), &FeedbackCollTask, fbcarg);
+    SNetThreadingSpawn( ENTITY_fbcoll, location, locvec,
+          "<fbcoll>", &FeedbackCollTask, fbcarg);
 
     /* create the instance network */
-    from_op = SNetInstantiate(box_a, into_op, info);
-    from_op = SNetRouteUpdate(info, from_op, location, locvec->index);
+    from_op = box_a(into_op, info, location);
+    from_op = SNetRouteUpdate(info, from_op, location);
 
     /* create the feedback dispatcher */
     fbdarg = SNetMemAlloc( sizeof( fbdisp_arg_t));
@@ -504,34 +510,17 @@ snet_stream_t *SNetFeedbackInst( snet_stream_t *input,
     fbdarg->backstream = SNetStreamOpen(back_bufin, 'w');
     fbdarg->back_patterns = back_patterns;
     fbdarg->guards = guards;
-    SNetThreadingSpawn( ENTITY_fbdisp, location, SNetNameCreate(locvec, SNetIdGet(info),
-          "<fbdisp>"), &FeedbackDispTask, fbdarg);
+    SNetThreadingSpawn( ENTITY_fbdisp, location, locvec,
+          "<fbdisp>", &FeedbackDispTask, fbdarg);
 
   } else {
-    //SNetVariantListDestroy(back_patterns);
-    //SNetExprListDestroy(guards);
-    output = SNetInstantiate(box_a, input, info);
-    output = SNetRouteUpdate(info, output, location, locvec->index);
+    SNetVariantListDestroy(back_patterns);
+    SNetExprListDestroy(guards);
+    output = box_a(input, info, location);
+    output = SNetRouteUpdate(info, output, location);
   }
 
-  return output;
-}
+  SNetLocvecFeedbackLeave(locvec);
 
-snet_ast_t *SNetFeedback(int location,
-                         snet_variant_list_t *back_patterns,
-                         snet_expr_list_t *guards,
-                         snet_startup_fun_t box_a)
-{
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_feedback;
-  result->locvec.type = LOC_FEEDBACK;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->feedback.back_patterns = back_patterns;
-  result->feedback.guards = guards;
-  result->feedback.box_a = box_a(location);
-  result->feedback.box_a->locvec.parent = &result->locvec;
-  return result;
+  return( output);
 }

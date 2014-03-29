@@ -8,7 +8,6 @@ typedef struct snet_ref snet_ref_t;
 
 #include "info.h"
 #include "stream.h"
-#include "snettypes.h"
 #include "bool.h"
 #include "ast.h"
 

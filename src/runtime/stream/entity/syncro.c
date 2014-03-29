@@ -26,12 +26,12 @@
 
 #include <assert.h>
 
-#include "ast.h"
 #include "snetentities.h"
 #include "bool.h"
 #include "memfun.h"
 #include "threading.h"
 #include "distribution.h"
+#include "locvec.h"
 #include "debug.h"
 #include "moninfo.h"
 
@@ -139,6 +139,8 @@ typedef struct {
 static void TerminateSyncBoxTask(sync_arg_t *sarg)
 {
   SNetMemFree( sarg->storage);
+  SNetVariantListDestroy( sarg->patterns);
+  SNetExprListDestroy( sarg->guard_exprs);
   SNetMemFree( sarg);
 }
 
@@ -209,8 +211,7 @@ static void SyncBoxTask(void *arg)
 #ifdef SYNC_SEND_OUTTYPES
         /* if we read from a star entity, we store the outtype along
            with the sync record */
-        snet_locvec_t *locvec = SNetStreamGetSource(SNetStreamGet(sarg->instream));
-        if (locvec != NULL ) {
+        if( SNetStreamGetSource( SNetStreamGet(sarg->instream)) != NULL ) {
           /*
            * To trigger garbage collection at a following parallel dispatcher
            * within a state-modeling network, the dispatcher needs knowledge about the
@@ -275,17 +276,19 @@ static void SyncBoxTask(void *arg)
 /**
  * Synchro-Box creation function
  */
-snet_stream_t *SNetSyncInst( snet_stream_t *input,
+snet_stream_t *SNetSync( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
     snet_variant_list_t *patterns,
     snet_expr_list_t *guard_exprs )
 {
   snet_stream_t *output;
   sync_arg_t *sarg;
+  snet_locvec_t *locvec;
 
-  input = SNetRouteUpdate(info, input, location, locvec->index);
+  locvec = SNetLocvecGet(info);
+
+  input = SNetRouteUpdate(info, input, location);
   if(SNetDistribIsNodeLocation(location)) {
     int i, num_patterns;
     output = SNetStreamCreate(0);
@@ -310,29 +313,13 @@ snet_stream_t *SNetSyncInst( snet_stream_t *input,
       sarg->storage[i] = &sarg->dummy;
     }
 
-    SNetThreadingSpawn( ENTITY_sync, location, SNetNameCreate(locvec, SNetIdGet(info),
-          "<sync>"), &SyncBoxTask, sarg);
+    SNetThreadingSpawn( ENTITY_sync, location, locvec,
+          "<sync>", &SyncBoxTask, sarg);
   } else {
-    //SNetVariantListDestroy( patterns);
-    //SNetExprListDestroy( guard_exprs);
+    SNetVariantListDestroy( patterns);
+    SNetExprListDestroy( guard_exprs);
     output = input;
   }
 
   return output;
-}
-
-snet_ast_t *SNetSync(int location,
-                     snet_variant_list_t *patterns,
-                     snet_expr_list_t *guard_exprs)
-{
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_sync;
-  result->locvec.type = LOC_SYNC;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->sync.patterns = patterns;
-  result->sync.guard_exprs = guard_exprs;
-  return result;
 }

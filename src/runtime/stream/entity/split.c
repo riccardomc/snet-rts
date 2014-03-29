@@ -1,10 +1,10 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "ast.h"
 #include "snetentities.h"
 
 #include "memfun.h"
+#include "locvec.h"
 #include "hashtab.h"
 #include "collector.h"
 #include "threading.h"
@@ -18,13 +18,12 @@
 
 typedef struct {
   snet_stream_desc_t *initial, *instream;
-  snet_ast_t *box;
+  snet_startup_fun_t boxfun;
   snet_info_t *info;
   int ltag, utag;
   bool is_det;
   bool is_byloc;
   int location;
-  snet_locvec_t *locvec;
   /* a list of all outstreams for all yet created instances */
   snet_streamset_t repos_set;
   snet_stream_iter_t *iter;
@@ -47,6 +46,10 @@ static void SplitBoxTask(void *arg)
   int ltag_val, utag_val;
   snet_info_t *info;
   snet_record_t *rec;
+  snet_locvec_t *locvec;
+
+
+
 
   /* read from input stream */
   rec = SNetStreamRead( sarg->instream);
@@ -74,19 +77,23 @@ static void SplitBoxTask(void *arg)
 
           /* create info and location vector for creation of this replica */
           info = SNetInfoCopy(sarg->info);
-          SNetIdAppend(info, i);
+          locvec = SNetLocvecSplitSpawn(SNetLocvecGet(sarg->info), i);
+          SNetLocvecSet(info, locvec);
 
           if( sarg->is_byloc) {
-            SNetRouteDynamicEnter(info, sarg->box->locvec.index, i);
-            temp_stream = SNetInstantiatePlacement(sarg->box, newstream_addr, info, i);
-            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, sarg->box->locvec.index);
+            SNetRouteDynamicEnter(info, i, i, sarg->boxfun);
+            temp_stream = sarg->boxfun(newstream_addr, info, i);
+            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location);
+            SNetRouteDynamicExit(info, i, i, sarg->boxfun);
           } else {
-            SNetRouteDynamicEnter(info, sarg->box->locvec.index, sarg->box->location); 
-            temp_stream = SNetInstantiatePlacement(sarg->box, newstream_addr, info, sarg->box->location);
-            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location, sarg->box->locvec.index);
+            SNetRouteDynamicEnter(info, i, sarg->location, sarg->boxfun);
+            temp_stream = sarg->boxfun(newstream_addr, info, sarg->location);
+            temp_stream = SNetRouteUpdate(info, temp_stream, sarg->location);
+            SNetRouteDynamicExit(info, i, sarg->location, sarg->boxfun);
           }
 
           /* destroy info and location vector */
+          SNetLocvecDestroy(locvec);
           SNetInfoDestroy(info);
 
           if(temp_stream != NULL) {
@@ -179,6 +186,7 @@ static void SplitBoxTask(void *arg)
       /* close instream */
       SNetStreamClose( sarg->instream, true);
 
+      SNetLocvecDestroy(SNetLocvecGet(sarg->info));
       SNetInfoDestroy(sarg->info);
       /* destroy the argument */
       SNetMemFree( sarg);
@@ -207,9 +215,8 @@ static void SplitBoxTask(void *arg)
  */
 snet_stream_t *CreateSplit( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
-    snet_ast_t *box_a,
+    snet_startup_fun_t box_a,
     int ltag, int utag,
     bool is_byloc,
     bool is_det
@@ -218,22 +225,26 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
   snet_info_t *newInfo = SNetInfoCopy(info);
   snet_stream_t *initial, *output;
   split_arg_t *sarg;
+  snet_locvec_t *locvec;
 
-  input = SNetRouteUpdate(info, input, location, locvec->index);
+  locvec = SNetLocvecGet(info);
+  SNetLocvecSplitEnter(locvec);
+  SNetLocvecSet(newInfo, SNetLocvecCopy(locvec));
+
+  input = SNetRouteUpdate(newInfo, input, location);
   if(SNetDistribIsNodeLocation(location)) {
     initial = SNetStreamCreate(0);
 
     sarg = SNetMemAlloc( sizeof( split_arg_t));
     sarg->instream  = SNetStreamOpen(input, 'r');
     sarg->initial = SNetStreamOpen(initial, 'w');
-    sarg->box = box_a;
+    sarg->boxfun = box_a;
     sarg->info = newInfo;
     sarg->ltag = ltag;
     sarg->utag = utag;
     sarg->is_det = is_det;
     sarg->is_byloc = is_byloc;
     sarg->location = location;
-    sarg->locvec = locvec;
     /* a list of all outstreams for all yet created instances */
     sarg->repos_set = NULL;
     sarg->iter = SNetStreamIterCreate( &sarg->repos_set);
@@ -241,17 +252,19 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
     sarg->repos_tab = HashtabCreate( 4);
 
     sarg->counter = 0;
-    SNetThreadingSpawn( ENTITY_split, location, SNetNameCreate(locvec, SNetIdGet(info),
-          "<split>"), &SplitBoxTask, sarg);
+    SNetThreadingSpawn( ENTITY_split, location, locvec,
+          "<split>", &SplitBoxTask, sarg);
 
-    output = CollectorCreateDynamic( initial, locvec, location, info);
+    output = CollectorCreateDynamic( initial, location, info);
 
   } else {
+    SNetLocvecDestroy(SNetLocvecGet(newInfo));
     SNetInfoDestroy(newInfo);
     output = input;
   }
+  SNetLocvecSplitLeave(locvec);
 
-  return output;
+  return( output);
 }
 
 
@@ -261,148 +274,64 @@ snet_stream_t *CreateSplit( snet_stream_t *input,
  * Non-det Split creation function
  *
  */
-snet_stream_t *SNetSplitInst( snet_stream_t *input,
+snet_stream_t *SNetSplit( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
-    snet_ast_t *box_a,
+    snet_startup_fun_t box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
+  return CreateSplit( input, info, location, box_a, ltag, utag,
       false, /* not by location */
       false  /* not det */
       );
 }
 
-snet_ast_t *SNetSplit(int location,
-                      snet_startup_fun_t box_a,
-                      int ltag, int utag)
-{
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_split;
-  result->locvec.type = LOC_SPLIT;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->split.det = false;
-  result->split.loc = false;
-  result->split.box_a = box_a(location);
-  result->split.box_a->locvec.parent = &result->locvec;
-  result->split.ltag = ltag;
-  result->split.utag = utag;
-  return result;
-}
 
 
 /**
  * Det Split creation function
  *
  */
-snet_stream_t *SNetSplitDetInst( snet_stream_t *input,
+snet_stream_t *SNetSplitDet( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
-    snet_ast_t *box_a,
+    snet_startup_fun_t box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
+  return CreateSplit( input, info, location, box_a, ltag, utag,
       false, /* not by location */
       true   /* is det */
       );
-}
-
-
-snet_ast_t *SNetSplitDet(int location,
-                         snet_startup_fun_t box_a,
-                         int ltag, int utag)
-{
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_split;
-  result->locvec.type = LOC_SPLIT;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->split.det = true;
-  result->split.loc = false;
-  result->split.box_a = box_a(location);
-  result->split.box_a->locvec.parent = &result->locvec;
-  result->split.ltag = ltag;
-  result->split.utag = utag;
-  return result;
 }
 
 /**
  * Non-det Location Split creation function
  *
  */
-snet_stream_t *SNetLocSplitInst( snet_stream_t *input,
+snet_stream_t *SNetLocSplit( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
-    snet_ast_t *box_a,
+    snet_startup_fun_t box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
+  return CreateSplit( input, info, location, box_a, ltag, utag,
       true, /* is by location */
       false /* not det */
       );
-}
-
-snet_ast_t *SNetLocSplit(int location,
-                         snet_startup_fun_t box_a,
-                         int ltag, int utag)
-{
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_split;
-  result->locvec.type = LOC_SPLIT;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->split.det = false;
-  result->split.loc = true;
-  result->split.box_a = box_a(location);
-  result->split.box_a->locvec.parent = &result->locvec;
-  result->split.ltag = ltag;
-  result->split.utag = utag;
-  return result;
 }
 
 /**
  * Det Location Split creation function
  *
  */
-snet_stream_t *SNetLocSplitDetInst( snet_stream_t *input,
+snet_stream_t *SNetLocSplitDet( snet_stream_t *input,
     snet_info_t *info,
-    snet_locvec_t *locvec,
     int location,
-    snet_ast_t *box_a,
+    snet_startup_fun_t box_a,
     int ltag, int utag)
 {
-  return CreateSplit( input, info, locvec, location, box_a, ltag, utag,
+  return CreateSplit( input, info, location, box_a, ltag, utag,
       true, /* is by location */
       true  /* is det */
       );
-}
-
-snet_ast_t *SNetLocSplitDet(int location,
-                            snet_startup_fun_t box_a,
-                            int ltag, int utag)
-{
-  snet_ast_t *result = SNetMemAlloc(sizeof(snet_ast_t));
-  result->location = location;
-  result->type = snet_split;
-  result->locvec.type = LOC_SPLIT;
-  result->locvec.index = SNetASTRegister(result);
-  result->locvec.num = -1;
-  result->locvec.parent = NULL;
-  result->split.det = true;
-  result->split.loc = true;
-  result->split.box_a = box_a(location);
-  result->split.box_a->locvec.parent = &result->locvec;
-  result->split.ltag = ltag;
-  result->split.utag = utag;
-  return result;
 }

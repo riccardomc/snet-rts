@@ -28,7 +28,6 @@
 #include <netdb.h>
 #include <regex.h>
 
-#include "ast.h"
 #include "bool.h"
 #include "constants.h"
 #include "memfun.h"
@@ -913,7 +912,8 @@ static void CreateObserverTask( obs_handle_t *hnd)
   char name[16];
   (void) snprintf(name, 16, "observer%02d", hnd->id);
   /* create a detached wrapper thread */
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL, name), ObserverBoxTask, hnd);
+  SNetThreadingSpawn( ENTITY_other, -1, NULL,
+        name, ObserverBoxTask, hnd);
 }
 
 

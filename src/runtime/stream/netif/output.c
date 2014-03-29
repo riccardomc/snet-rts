@@ -19,7 +19,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "ast.h"
 #include "memfun.h"
 #include "output.h"
 #include "snetentities.h"
@@ -203,5 +202,6 @@ void SNetInOutputInit(FILE *file,
   hnd->interfaces = interfaces;
   hnd->buffer = out_buf;
 
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL, "glob_output"), GlobOutputTask, hnd);
+  SNetThreadingSpawn( ENTITY_other, -1, NULL,
+        "glob_output", GlobOutputTask, hnd);
 }

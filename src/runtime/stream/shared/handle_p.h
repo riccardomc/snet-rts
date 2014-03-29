@@ -2,6 +2,7 @@
 #define _HANDLE_P_H_
 
 #include "handle.h"
+#include "locvec.h"
 #include "threading.h"
 
 typedef struct {

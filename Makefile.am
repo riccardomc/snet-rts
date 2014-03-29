@@ -25,7 +25,6 @@ pkginclude_HEADERS = \
 	src/interfaces/c4snet/C4SNet.h \
 	src/interfaces/c4snet/C4SNetc.h \
 	include/atomiccnt.h \
-	include/ast.h \
 	include/bool.h \
 	include/constants.h \
 	include/debug.h \
@@ -40,6 +39,7 @@ pkginclude_HEADERS = \
 	include/list-template.h \
 	include/list-template.c \
 	include/list.h \
+	include/locvec.h \
 	include/map-template.h \
 	include/map-template.c \
 	include/map.h \
@@ -85,12 +85,12 @@ libruntimestream_la_SOURCES = \
 	src/runtime/stream/utils/hashtab.h \
 	src/runtime/stream/utils/hashtable.c \
 	src/runtime/stream/utils/hashtable.h \
+	src/runtime/stream/utils/locvec.c \
 	src/runtime/stream/utils/queue.c \
 	src/runtime/stream/utils/queue.h \
 	src/runtime/stream/shared/handle.c \
 	src/runtime/stream/shared/handle_p.h \
 	src/runtime/stream/entity/alias.c \
-	src/runtime/stream/entity/ast.c \
 	src/runtime/stream/entity/box.c \
 	src/runtime/stream/entity/collector.c \
 	src/runtime/stream/entity/collector.h \
@@ -243,6 +243,7 @@ libdistribzmq_la_SOURCES = \
 	src/distrib/zmq/htab.h \
 	src/distrib/zmq/sysutils.h \
 	src/distrib/zmq/sysutils.c
+	src/distrib/zmq/pack.h
 libdistribzmq_la_CPPFLAGS = \
         $(AM_CPPFLAGS) \
 	-I$(srcdir)/src/distrib/zmq \

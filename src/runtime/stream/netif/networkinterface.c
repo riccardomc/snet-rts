@@ -26,7 +26,6 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 
-#include "ast.h"
 #include "output.h"
 #include "input.h"
 #include "observers.h"
@@ -34,6 +33,7 @@
 #include "debug.h"
 #include "threading.h"
 #include "distribution.h"
+#include "locvec.h"
 
 static FILE *SNetInOpenFile(const char *file, const char *args)
 {
@@ -158,6 +158,7 @@ int SNetInRun(int argc, char **argv,
   snet_stream_t *output_stream = NULL;
   int i = 0;
   snet_info_t *info;
+  snet_locvec_t *locvec;
   snetin_label_t *labels = NULL;
   snetin_interface_t *interfaces = NULL;
   char *brk;
@@ -259,13 +260,12 @@ int SNetInRun(int argc, char **argv,
 
   SNetObserverInit(labels, interfaces);
 
-  SNetIdInit(info);
+  locvec = SNetLocvecCreate();
+  SNetLocvecSet(info, locvec);
 
-  snet_ast_t *ast = SNetASTInit(fun, 0);
   input_stream = SNetStreamCreate(0);
-  output_stream = SNetInstantiate(ast, input_stream, info);
-  output_stream = SNetRouteUpdate(info, output_stream, 0, ast->locvec.index);
-
+  output_stream = fun(input_stream, info, 0);
+  output_stream = SNetRouteUpdate(info, output_stream, 0);
 
   SNetDistribStart();
 
@@ -279,8 +279,6 @@ int SNetInRun(int argc, char **argv,
 
   SNetDistribWaitExit(info);
 
-  SNetASTCleanup();
-
   /* tell the threading layer that it is ok to shutdown,
      and wait until it has stopped such that it can be cleaned up */
   (void) SNetThreadingStop();
@@ -288,6 +286,8 @@ int SNetInRun(int argc, char **argv,
   (void) SNetThreadingCleanup();
 
   SNetInfoDestroy(info);
+
+  SNetLocvecDestroy(locvec);
 
   /* destroy observers */
   SNetObserverDestroy();

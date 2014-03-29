@@ -19,7 +19,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#include "ast.h"
 #include "memfun.h"
 #include "input.h"
 #include "snetentities.h"
@@ -79,5 +78,6 @@ void SNetInInputInit(FILE *file,
   hnd->interfaces = interfaces;
   hnd->buffer = in_buf;
 
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL, "glob_input"), GlobInputTask, hnd);
+  SNetThreadingSpawn( ENTITY_other, -1, NULL,
+        "glob_input", GlobInputTask, hnd);
 }

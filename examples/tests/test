@@ -20,7 +20,6 @@ function runTests {
     fail_flag=false
     # Try to compile test
     if make -C $base/$dir 2>/dev/null >/dev/null; then
-    #if make -C $base/$dir; then
       # If the compile succeeded, run the test for each XML file.
       for input in $base/$dir/*.xml; do
         if [ -f $base/$dir/$dir ]; then

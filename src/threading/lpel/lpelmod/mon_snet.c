@@ -6,6 +6,7 @@
 
 #include "mon_snet.h"
 
+#include "locvec.h"
 #include "moninfo.h"
 
 #define PrintTiming(t, file)  PrintTimingNs((t),(file))
