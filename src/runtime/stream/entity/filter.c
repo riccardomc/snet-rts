@@ -451,7 +451,6 @@ snet_stream_t* SNetTranslate( snet_stream_t *instream,
 
   return CreateFilter(instream, info, location, input_variant,
       guard_exprs, instr_list, "<translate>");
-  result->locvec.index = SNetASTRegister(result);
 }
 
 

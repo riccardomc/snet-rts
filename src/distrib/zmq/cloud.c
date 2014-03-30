@@ -6,6 +6,7 @@
 #include "cloud.h"
 #include "sysutils.h"
 #include "threading.h"
+#include "memfun.h"
 
 static cloud_opts_t opts;
 static snet_instance_t instances[SNET_CLOUD_INSTLN];
@@ -413,8 +414,7 @@ int SNetCloudSpawn(int index)
   instances[index].state = inst_spawning;
   zmutex_unlock(instances_mtx);
 
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL,
-      tn), &SNetCloudSpawnAux, i);
+  SNetThreadingSpawn( ENTITY_other, -1, NULL, "<zmq_cloud>", &SNetCloudSpawnAux, i);
 
   return true;
 }

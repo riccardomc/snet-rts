@@ -58,9 +58,6 @@ static void (*MemFree)(void*) = &SNetMemFree;
 
 /************************* Distribution functions *****************************/
 #ifdef ENABLE_DIST_MPI
-#include <mpi.h>
-#include "pack.h"
-
 static void MPIPackFun(c4snet_data_t *data, void *buf);
 static c4snet_data_t *MPIUnpackFun(void *buf);
 #endif

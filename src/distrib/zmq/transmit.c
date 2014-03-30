@@ -53,8 +53,8 @@ snet_msg_t SNetDistribRecvMsg(void)
       break;
     case snet_rec:
       result.rec = SNetRecDeserialise(&payload_f);
-      result.dest = SNetDestDeserialise(&payload_f);
-      SNetDistribUnpack(&source_f, &result.dest->node, sizeof(int));
+      SNetDistribUnpack(&payload_f, &result.dest, sizeof(snet_dest_t));
+      SNetDistribUnpack(&source_f, &result.dest.node, sizeof(int));
       break;
     case snet_ref_set:
       result.ref = SNetRefDeserialise(&payload_f);
@@ -81,21 +81,21 @@ snet_msg_t SNetDistribRecvMsg(void)
   return result;
 }
 
-void SNetDistribSendRecord(snet_dest_t *dest, snet_record_t *rec)
+void SNetDistribSendRecord(snet_dest_t dest, snet_record_t *rec)
 {
   static zframe_t *payload;
   payload = NULL;
   SNetRecSerialise(rec, &payload);
-  SNetDestSerialise(dest, &payload);
-  SNetDistribZMQSend(payload, snet_rec, dest->node);
+  SNetDistribPack(&payload, &dest, sizeof(snet_dest_t));
+  SNetDistribZMQSend(payload, snet_rec, dest.node);
 }
 
-void SNetDistribBlockDest(snet_dest_t *dest)
+void SNetDistribBlockDest(snet_dest_t dest)
 {
   (void) dest; /* NOT USED */
 }
 
-void SNetDistribUnblockDest(snet_dest_t *dest)
+void SNetDistribUnblockDest(snet_dest_t dest)
 {
   (void) dest; /* NOT USED */
 }

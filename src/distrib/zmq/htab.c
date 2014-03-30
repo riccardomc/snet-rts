@@ -328,8 +328,7 @@ void SNetDistribZMQHTabInit(int dport, int sport, int node_location, char *raddr
 // start host table thread
 void SNetDistribZMQHTabStart(void)
 {
-  SNetThreadingSpawn( ENTITY_other, -1, SNetNameCreate(NULL, NULL,
-      "zmq_htab"), &SNetDistribZMQHTab, NULL);
+  SNetThreadingSpawn( ENTITY_other, -1, NULL, "<zmq_htab>", &SNetDistribZMQHTab, NULL);
 
 }
 

@@ -32,7 +32,6 @@ void SNetDistribWaitExit(snet_info_t *info)
   pthread_mutex_lock(&exitMutex);
   while (running) pthread_cond_wait(&exitCond, &exitMutex);
   pthread_mutex_unlock(&exitMutex);
-  SNetReferenceDestroy();
 }
 
 int SNetDistribGetNodeId(void) { return node_location; }
@@ -46,22 +45,35 @@ bool SNetDistribIsNodeLocation(int location)
 
 bool SNetDistribIsRootNode(void) { return true; }
 
-snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *input, int loc, int index)
+bool SNetDistribIsDistributed(void) { return false; }
+
+snet_stream_t *SNetRouteUpdate(snet_info_t *info, snet_stream_t *input, int loc)
 {
   (void) info; /* NOT USED */
   (void) input; /* NOT USED */
   (void) loc; /* NOT USED */
-  (void) index; /* NOT USED */
 
   return input;
 }
 
-void SNetRouteDynamicEnter(snet_info_t *info, int dynamicParent, int dynamicLoc)
+void SNetRouteDynamicEnter(snet_info_t *info, int dynamicIndex, int dynamicLoc,
+                           snet_startup_fun_t fun)
 {
   (void) info; /* NOT USED */
-  (void) dynamicParent; /* NOT USED */
+  (void) dynamicIndex; /* NOT USED */
   (void) dynamicLoc; /* NOT USED */
+  (void) fun; /* NOT USED */
+  return;
+}
 
+void SNetRouteDynamicExit(snet_info_t *info, int dynamicIndex, int dynamicLoc,
+                           snet_startup_fun_t fun)
+{
+  (void) info; /* NOT USED */
+  (void) dynamicIndex; /* NOT USED */
+  (void) dynamicLoc; /* NOT USED */
+  (void) fun; /* NOT USED */
+  return;
 }
 
 void SNetDistribSendData(snet_ref_t *ref, void *data, int node) {}
